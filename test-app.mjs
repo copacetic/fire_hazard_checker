@@ -203,6 +203,27 @@ const LAUSD_KEY_MS = { objectIdFieldName: "FID", features: [
 const LAUSD_KEY_HS = { objectIdFieldName: "FID", features: [
   { attributes: { OBJECTID: 156, SCHOOL_ID: "8750", NAME: "Marshall SH", LO_GRD: 9, HI_GRD: 12, CONFIG: "9-12", LEVEL: "H", CDS: "1935568", CCC: "1875001", SCH_YR: "2019-20", HKEY_5: 30024, KEY_: 24, FID: 103 } }
 ]};
+// CA Dashboard ratings fixture — REAL entries extracted from the baked
+// dashboard-ratings.json (2025 files). Injected via window.FIRE_CHECKER_DATA
+// because file:// pages can't fetch local JSON (production fetches it).
+// Note: the Ivanhoe stub's ncessch is deliberately absent from n — its row
+// must show no pills (honest gap).
+const DASH_FIX = {
+  generated: "2026-08-05", colors: "1=Red 2=Orange 3=Yellow 4=Green 5=Blue",
+  years: { ela: "2025", math: "2025", chr: "2025", su: "2025", gr: "2025", cc: "2025" },
+  n: { "062271002828": "19647336015895", "061524001935": "19645686013726", "061524001946": "19645686057723", "061524001933": "19645681934082" },
+  r: {
+    "19647331935568": { ela: 3, math: 3, su: 5, gr: 5, cc: 4 },
+    "19647336015895": { ela: 5, math: 4, chr: 1, su: 5 },
+    "19645686013726": { ela: 2, math: 4, chr: 4, su: 3 },
+    "19645686057723": { ela: 3, math: 4, chr: 3, su: 4 },
+    "19645681934082": { ela: 3, math: 3, su: 2, gr: 3, cc: 3 }
+  }
+};
+async function injectDash(page) {
+  await page.addInitScript(d => { window.FIRE_CHECKER_DATA = d; }, DASH_FIX);
+}
+
 async function lausdAssignedRoutes(page) {
   await page.route("**/maps.lacity.org/**", r => {
     const u = r.request().url();
@@ -400,6 +421,7 @@ async function schoolsBaseRoutes(page) {
   await page.route("**/School_Districts_Current/FeatureServer/**", r => json(r, NCES_DIST_LAUSD));
   await page.route("**/Public_School_Locations_Current/FeatureServer/**", r => json(r, NCES_SCHOOLS_OK));
   await lausdAssignedRoutes(page);
+  await injectDash(page);
   await page.route("**/SABS_1516/**", r => json(r, { features: [] })); // LAUSD must NOT hit SABS — empty stub makes that failure visible
   await page.goto(appUrl);
   await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
@@ -448,6 +470,14 @@ async function schoolsBaseRoutes(page) {
   check("ASG: CDE profile link from CDS (Marshall 19647331935568)", (await page.locator('#asglist a[href*="SchoolDirectory/details?cdscode=19647331935568"]').count()) === 1);
   check("ASG: DTS center (null CDS) gets no Dashboard link", (await page.locator('#asglist .schoolrow:has-text("DTS") a[href*="caschooldashboard"]').count()) === 0);
   check("ASG: 2019-20 vintage disclaimed", sch.includes("2019-20"));
+
+  // -- inline official CA Dashboard rating pills (baked data) --
+  const marshallRow = await page.textContent('#asglist .schoolrow:has-text("Marshall SH")');
+  check("DASH: assigned Marshall shows official pills (Graduation Blue)", marshallRow.includes("Graduation Blue") && marshallRow.includes("ELA Yellow"), marshallRow);
+  const atwaterNearby = await page.textContent('#tab-schools .schoollist:not(#asglist) .schoolrow:has-text("Atwater Avenue")');
+  check("DASH: nearby school pills via NCES→CDS map (ELA Blue, Absenteeism Red)", atwaterNearby.includes("ELA Blue") && atwaterNearby.includes("Absenteeism Red"), atwaterNearby);
+  check("DASH: school without a published rating gets no pills (Ivanhoe)", (await page.locator('#tab-schools .schoolrow:has-text("Ivanhoe") .dpill').count()) === 0);
+  check("DASH: pills legend note with year", sch.includes("CA School Dashboard 2025") && sch.includes("Red = lowest"));
   await page.screenshot({ path: path.join(here, "shot-schools.png"), fullPage: true });
 
   // switching back to Fire still works and content intact
@@ -504,6 +534,7 @@ async function schoolsBaseRoutes(page) {
   // GUSD must never touch the LAUSD layers — abort makes any such call a visible failure
   await page.route("**/maps.lacity.org/**", r => r.abort("failed"));
   await page.route("**/services5.arcgis.com/**", r => r.abort("failed"));
+  await injectDash(page);
   await page.goto(appUrl);
   await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
   await page.click("#go");
@@ -524,6 +555,8 @@ async function schoolsBaseRoutes(page) {
   check("GUSD: NCES per-school profile link (Keppel)", (await page.locator('#asglist a[href*="school_detail.asp?Search=1&ID=061524001935"]').count()) === 1);
   check("GUSD: level tags rendered (3)", (await page.locator("#asglist .stag").count()) === 3);
   check("GUSD: no LAUSD RSI link for non-LAUSD district", (await page.locator('#tab-schools a[href*="rsi.lausd.net"]').count()) === 0);
+  const keppelRow = await page.textContent('#asglist .schoolrow:has-text("Keppel")');
+  check("GUSD-DASH: SABS school pills via NCES→CDS map (Keppel ELA Orange)", keppelRow.includes("ELA Orange") && keppelRow.includes("Math Green"), keppelRow);
   check("GUSD: no JS errors", errors.length === 0, errors.join(" | "));
   await page.screenshot({ path: path.join(here, "shot-schools-gusd.png"), fullPage: true });
   await ctx.close();
@@ -1146,6 +1179,57 @@ async function schoolsBaseRoutes(page) {
   const mv = await page.textContent("#tab-move");
   check("BIKE-FALL: non-covering empty layer can't fabricate 'no bikeways'", mv.includes("Couldn’t load the bikeway inventories") && !mv.includes("No existing bikeway"), mv.slice(0, 400));
   check("BIKE-FALL: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- owner-configured keys: Walk Score® inline via JSONP --
+{
+  // WS_OK follows the Walk Score API's documented response shape; the score
+  // values are the live-verified badge numbers for 2968 Tyburn St (79/51/77)
+  const WS_OK = { status: 1, walkscore: 79, description: "Very Walkable", updated: "2025-01-01", ws_link: "https://www.walkscore.com/score/2968-tyburn-st-los-angeles-ca-90039", help_link: "https://www.walkscore.com/how-it-works/", snapped_lat: 34.1127, snapped_lon: -118.2616, transit: { score: 51, description: "Good Transit", summary: "" }, bike: { score: 77, description: "Very Bikeable" } };
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.addInitScript(() => { window.FIRE_CHECKER_KEYS = { walkscoreKey: "TESTKEY" }; });
+  await schoolsBaseRoutes(page);
+  await moveRoutes(page);
+  await page.route("**/api.walkscore.com/**", r => {
+    const cb = new URL(r.request().url()).searchParams.get("callback");
+    return r.fulfill({ contentType: "application/javascript", body: `${cb}(${JSON.stringify(WS_OK)})` });
+  });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .tile", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const mv = await page.textContent("#tab-move");
+  check("WS: inline Walk/Transit/Bike Scores when key configured", mv.includes("Walk Score®") && mv.includes("79") && mv.includes("51") && mv.includes("77"), mv.slice(0, 500));
+  check("WS: score descriptions shown", mv.includes("Very Walkable") && mv.includes("Good Transit"));
+  check("WS: attribution links to walkscore.com", (await page.locator('#tab-move a[href="https://www.walkscore.com/score/2968-tyburn-st-los-angeles-ca-90039"]').count()) >= 1);
+  check("WS: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- owner-configured keys: Socrata app token on LAPD queries --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  await page.addInitScript(() => { window.FIRE_CHECKER_KEYS = { socrataAppToken: "TESTTOKEN123" }; });
+  await schoolsBaseRoutes(page);
+  await safetyRoutes(page);
+  let lapdUrl = null;
+  await page.route("**/data.lacity.org/resource/k7nn-b2ep.json*", r => { lapdUrl = r.request().url(); return json(r, LAPD_K7); });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="safety"]');
+  await page.waitForSelector("#tab-safety .tile", { timeout: 10000 });
+  check("KEYS: Socrata app token appended when configured", lapdUrl != null && lapdUrl.includes("%24%24app_token=TESTTOKEN123"), String(lapdUrl));
   await ctx.close();
 }
 

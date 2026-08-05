@@ -263,8 +263,8 @@ const AADT_I5 = { features: [
   { attributes: { OBJECTID: 12072, DISTRICT: "7", RTE: "5", RTE_SFX: null, CNTY: "LA", PM_PFX: null, PM: "23.655", PM_SFX: null, DESCRIPTION: "LOS ANGELES, GLENDALE BOULEVARD", BACK_PEAK_HOUR: "14200", BACK_PEAK_MADT: "230000", BACK_AADT: "219000", AHEAD_PEAK_HOUR: "13700", AHEAD_PEAK_MADT: "220000", AHEAD_AADT: "210000" } },
   { attributes: { OBJECTID: 12073, DISTRICT: "7", RTE: "5", RTE_SFX: null, CNTY: "LA", PM_PFX: null, PM: "23.655", PM_SFX: null, DESCRIPTION: "LOS ANGELES, GLENDALE BOULEVARD", BACK_PEAK_HOUR: "14200", BACK_PEAK_MADT: "230000", BACK_AADT: "219000", AHEAD_PEAK_HOUR: "13700", AHEAD_PEAK_MADT: "220000", AHEAD_AADT: "210000" } }
 ]}; // verbatim Traffic_AADT 500m ring @ Tyburn
-const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn
-const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd
+const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, PM2_5: 11.96632968, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn (PM2_5 raw re-captured)
+const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, PM2_5: 11.73519514, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd (PM2_5 raw re-captured)
 // Multi-location response is a bare ARRAY in request order; only entries after
 // the first carry location_id. Verbatim @ Tyburn + Downtown LA + Santa Monica
 // + Van Nuys (identical values are real — one uniform-basin hour).
@@ -473,11 +473,13 @@ async function schoolsBaseRoutes(page) {
 
   // -- inline official CA Dashboard rating pills (baked data) --
   const marshallRow = await page.textContent('#asglist .schoolrow:has-text("Marshall SH")');
-  check("DASH: assigned Marshall shows official pills (Graduation Blue)", marshallRow.includes("Graduation Blue") && marshallRow.includes("ELA Yellow"), marshallRow);
+  check("DASH: assigned Marshall shows plain-language n/5 pills", marshallRow.includes("Graduation 5/5") && marshallRow.includes("English 3/5"), marshallRow);
   const atwaterNearby = await page.textContent('#tab-schools .schoollist:not(#asglist) .schoolrow:has-text("Atwater Avenue")');
-  check("DASH: nearby school pills via NCES→CDS map (ELA Blue, Absenteeism Red)", atwaterNearby.includes("ELA Blue") && atwaterNearby.includes("Absenteeism Red"), atwaterNearby);
+  check("DASH: nearby school pills via NCES→CDS map (English 5/5, Absences 1/5)", atwaterNearby.includes("English 5/5") && atwaterNearby.includes("Absences 1/5"), atwaterNearby);
+  check("DASH: no Dashboard jargon in pill labels", !sch.includes("ELA") && !sch.includes("Absenteeism"), "labels must be plain language");
+  check("DASH: hover explains each pill in full sentences", (await page.locator('#asglist .dpill').first().getAttribute("title") || "").includes("the state rates this"));
   check("DASH: school without a published rating gets no pills (Ivanhoe)", (await page.locator('#tab-schools .schoolrow:has-text("Ivanhoe") .dpill').count()) === 0);
-  check("DASH: pills legend note with year", sch.includes("CA School Dashboard 2025") && sch.includes("Red = lowest"));
+  check("DASH: pills legend explains 1–5 higher-is-better", sch.includes("CA School Dashboard 2025") && sch.includes("higher is better"));
   await page.screenshot({ path: path.join(here, "shot-schools.png"), fullPage: true });
 
   // switching back to Fire still works and content intact
@@ -556,7 +558,7 @@ async function schoolsBaseRoutes(page) {
   check("GUSD: level tags rendered (3)", (await page.locator("#asglist .stag").count()) === 3);
   check("GUSD: no LAUSD RSI link for non-LAUSD district", (await page.locator('#tab-schools a[href*="rsi.lausd.net"]').count()) === 0);
   const keppelRow = await page.textContent('#asglist .schoolrow:has-text("Keppel")');
-  check("GUSD-DASH: SABS school pills via NCES→CDS map (Keppel ELA Orange)", keppelRow.includes("ELA Orange") && keppelRow.includes("Math Green"), keppelRow);
+  check("GUSD-DASH: SABS school pills via NCES→CDS map (Keppel English 2/5, Math 4/5)", keppelRow.includes("English 2/5") && keppelRow.includes("Math 4/5"), keppelRow);
   check("GUSD: no JS errors", errors.length === 0, errors.join(" | "));
   await page.screenshot({ path: path.join(here, "shot-schools-gusd.png"), fullPage: true });
   await ctx.close();
@@ -655,6 +657,10 @@ async function schoolsBaseRoutes(page) {
   check("AIR: CES overall 68th percentile", air.includes("68th"));
   check("AIR: CES traffic 91st percentile", air.includes("91st"));
   check("AIR: CES diesel 89th percentile", air.includes("89th"));
+  check("AIR: plain verdict names the drivers", air.includes("higher than 68%") && air.includes("vehicle traffic (worse than 91% of tracts)"), air.slice(0, 500));
+  check("AIR: percentile tiles carry plain-English tiers", air.includes("Among CA’s highest") && air.includes("High for CA"));
+  check("AIR: absolute PM2.5 health comparison", air.includes("12.0 µg/m³") && air.includes("EPA health standard") && air.includes("2.4× the WHO guideline"), air.slice(0, 900));
+  check("AIR: long-term burden leads, live AQI demoted to snapshot", air.indexOf("Long-term air pollution burden") >= 0 && air.indexOf("Long-term air pollution burden") < air.indexOf("Air quality right now (snapshot)"));
   check("AIR: CES tract id zero-padded + vintage shown", air.includes("06037187101") && air.includes("CalEnviroScreen 4.0"));
   check("AIR: AQI 67 with Moderate category label", air.includes("67") && air.includes("Moderate"));
   check("AIR: PM2.5 value with units", air.includes("19.2") && air.includes("µg/m³"));
@@ -696,6 +702,8 @@ async function schoolsBaseRoutes(page) {
   check("AIR-P2: no highway AND no station honestly labeled", (air.match(/None within 1 km/g) || []).length === 2, air.slice(0, 300));
   check("AIR-P2: no CARB warnbox when nothing near", !air.includes("500 ft"));
   check("AIR-P2: CES traffic 8th percentile (quiet street)", air.includes("8th"));
+  check("AIR-P2: quiet-street tiers read as clean", air.includes("Cleaner than most of CA") && air.includes("higher than 52%"), air.slice(0, 500));
+  check("AIR-P2: PM2.5 still above standards even here (11.7)", air.includes("11.7 µg/m³") && air.includes("EPA health standard"));
   check("AIR-P2: CES tract is the Glendale one", air.includes("6037301300") && air.includes("Glendale"));
   check("AIR-P2: no rail within 1 km honest", air.includes("No rail line within 1 km"));
   check("AIR-P2: airport contour renders with MAX ring (Burbank 70 dB CNEL, not 65)", air.includes("Burbank") && air.includes("70") && air.includes("CNEL") && !air.includes("65 dB CNEL"));

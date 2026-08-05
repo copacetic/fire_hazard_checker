@@ -799,7 +799,18 @@ function getDashData() {
   }
   return dashDataP;
 }
-const DASH_LABELS = { ela: "ELA", math: "Math", chr: "Absenteeism", su: "Suspensions", gr: "Graduation", cc: "College/Career" };
+// plain-language labels for the state's indicator names — the official terms
+// (ELA, Chronic Absenteeism…) confused non-educators in real use
+const DASH_LABELS = {
+  ela: ["English", "English Language Arts test results"],
+  math: ["Math", "Mathematics test results"],
+  chr: ["Absences", "Chronic absenteeism — how many students miss a lot of school"],
+  su: ["Suspensions", "Suspension rate"],
+  gr: ["Graduation", "High-school graduation rate"],
+  cc: ["College/Career", "Graduates prepared for college or a career"]
+};
+// the state's five levels, lowest→highest (their color order is unintuitive —
+// Blue outranks Green — so the UI shows n/5 and keeps the color as a dot)
 const DASH_COLORS = { 1: ["Red", "var(--st-critical)"], 2: ["Orange", "var(--st-serious)"], 3: ["Yellow", "var(--st-warning)"], 4: ["Green", "var(--st-good)"], 5: ["Blue", "var(--accent)"] };
 function dashPills(dash, cds14) {
   const rec = dash && dash.r && cds14 && dash.r[cds14];
@@ -807,7 +818,9 @@ function dashPills(dash, cds14) {
   const parts = [];
   for (const k in DASH_LABELS) {
     const c = DASH_COLORS[rec[k]];
-    if (c) parts.push(`<span class="dpill"><span class="ddot" style="background:${c[1]}"></span>${DASH_LABELS[k]} ${c[0]}</span>`);
+    if (!c) continue;
+    const tip = `${DASH_LABELS[k][1]} — the state rates this ${rec[k]} of 5 (“${c[0]}”${rec[k] === 5 ? ", the highest level" : rec[k] === 1 ? ", the lowest level" : ""}), combining current results and year-over-year change. CA School Dashboard.`;
+    parts.push(`<span class="dpill" title="${esc(tip)}"><span class="ddot" style="background:${c[1]}"></span>${DASH_LABELS[k][0]} ${rec[k]}/5</span>`);
   }
   return parts.length ? `<div class="dashpills">${parts.join("")}</div>` : "";
 }
@@ -989,7 +1002,7 @@ function renderSchools(geo, district, schools, assigned, dash) {
       </div>`;
     }).join("");
     nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
-      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.${dash ? ` Colored pills are the school’s official <strong>CA School Dashboard ${esc(String((dash.years && dash.years.ela) || ""))}</strong> ratings (Red = lowest … Blue = highest); schools without pills have no published rating.` : ""}</p>
+      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.${dash ? ` The pills are the school’s state report card (<strong>CA School Dashboard ${esc(String((dash.years && dash.years.ela) || ""))}</strong>): each area is rated <strong>1–5, higher is better</strong>, based on results plus improvement — the dot is the state’s official color for that level. Schools without pills have no published rating.` : ""}</p>
       <div class="schoollist">${rows}</div>
       ${schools.length > 10 ? `<p class="section-sub" style="margin-top:8px">+ ${schools.length - 10} more within a mile</p>` : ""}`;
   } else if (schools) {
@@ -1105,10 +1118,18 @@ async function aadtLookup(lon, lat) {
 
 async function cesLookup(lon, lat) {
   const j = await getJSON(arcgisPointQuery(CES4, lon, lat, {
-    outFields: "Tract,CIscore,CIscoreP,Traffic_Pctl,Diesel_PM_Pctl,PM2_5_Pctl,Ozone_Pctl,Asthma_Pctl,County,ApproxLoc,Population"
+    outFields: "Tract,CIscore,CIscoreP,PM2_5,Traffic_Pctl,Diesel_PM_Pctl,PM2_5_Pctl,Ozone_Pctl,Asthma_Pctl,County,ApproxLoc,Population"
   }));
   const f = (j.features || [])[0];
   return f ? f.attributes : null;                // null = not inside a scored CA tract
+}
+// percentile → plain-English tier (answers "is this healthy or not")
+function cesTier(p) {
+  if (p <= 25) return { st: "good", label: "Cleaner than most of CA" };
+  if (p <= 50) return { st: "good", label: "Below CA average" };
+  if (p <= 75) return { st: "warning", label: "Above CA average" };
+  if (p <= 90) return { st: "serious", label: "High for CA" };
+  return { st: "critical", label: "Among CA’s highest" };
 }
 
 // fixed reference points so the current AQI can be compared across the LA
@@ -1198,19 +1219,35 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
 
   const pctlTile = (label, v, note) => v == null
     ? `<div class="tile"><div class="label">${label}</div><div class="value" style="font-size:15px">No score</div><div class="note">Not scored for this tract</div></div>`
-    : `<div class="tile"><div class="label">${label}</div><div class="value">${ordinal(Math.round(v))}</div><div class="note">${note}</div></div>`;
+    : `<div class="tile"><div class="label">${label}</div><div class="value">${ordinal(Math.round(v))}</div><div class="note">${badge(cesTier(v).st, cesTier(v).label)}</div><div class="note">${note}</div></div>`;
   let cesBody;
   if (!ces) cesBody = `<p class="section-sub">Couldn’t load CalEnviroScreen — check the official map below.</p>`;
   else if (ces.none) cesBody = `<p class="section-sub">This location isn’t inside a scored CalEnviroScreen tract (only California census tracts are scored).</p>`;
-  else cesBody = `
-    <p class="section-sub">Percentile across all 8,035 California tracts — <strong>higher = more pollution-burdened</strong>.</p>
+  else {
+    // plain-verdict line: how burdened, and what's driving it
+    let verdict = "";
+    if (ces.CIscoreP != null) {
+      const drivers = [["vehicle traffic", ces.Traffic_Pctl], ["diesel exhaust", ces.Diesel_PM_Pctl], ["fine particles", ces.PM2_5_Pctl]]
+        .filter(d => d[1] != null && d[1] > 75).sort((a, b) => b[1] - a[1]).slice(0, 2);
+      verdict = `<p class="section-sub" style="font-size:14px">Long-term pollution burden here is <strong>higher than ${Math.round(ces.CIscoreP)}%</strong> of California census tracts${drivers.length ? " — driven especially by " + drivers.map(d => `${d[0]} (worse than ${Math.round(d[1])}% of tracts)`).join(" and ") : ""}.</p>`;
+    }
+    // absolute health context: the tract's actual annual PM2.5 vs the standards
+    let pmLine = "";
+    if (ces.PM2_5 != null) {
+      const v = ces.PM2_5;
+      pmLine = `<p class="section-sub" style="margin-top:8px">Annual fine-particle (PM2.5) average here: <strong>~${esc(v.toFixed(1))} µg/m³</strong> — ${v > 9 ? "<strong>above</strong>" : "within"} the EPA health standard of 9 µg/m³ and ${v > 5 ? esc((v / 5).toFixed(1)) + "× the WHO guideline" : "within the WHO guideline"} of 5 (2015-17 average, the latest CalEnviroScreen data).</p>`;
+    }
+    cesBody = `
+    ${verdict}
     <div class="tiles">
-      ${pctlTile("Overall burden", ces.CIscoreP, "pollution burden + population vulnerability combined")}
+      ${pctlTile("Overall burden", ces.CIscoreP, "pollution + population vulnerability, percentile in CA")}
       ${pctlTile("Traffic density", ces.Traffic_Pctl, "vehicle traffic on roads near the tract")}
       ${pctlTile("Diesel particulates", ces.Diesel_PM_Pctl, "diesel PM emissions nearby")}
       ${pctlTile("Fine particles (PM2.5)", ces.PM2_5_Pctl, "annual fine-particle concentration")}
     </div>
+    ${pmLine}
     <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract).padStart(11, "0"))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
+  }
 
   let aqBody;
   if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — the service may be briefly unreachable; try again in a minute, and check AirNow below.</p>`;
@@ -1258,24 +1295,25 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
   const linksHtml = links.map(([t, u, d]) =>
     `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
 
+  // long-term exposure leads; the live AQI is just a snapshot and comes last
   $("tab-air").innerHTML = `
     <div class="card">
       <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Long-term air pollution burden</h3>
+      ${cesBody}
+    </div>
+    <div class="card">
       <h3 class="section">Traffic &amp; freeway exposure</h3>
       <div class="tiles">${hwTile}${aadtTile}</div>
       ${carbBox}
     </div>
     <div class="card">
-      <h3 class="section">Neighborhood pollution burden</h3>
-      ${cesBody}
-    </div>
-    <div class="card">
-      <h3 class="section">Air quality right now</h3>
-      ${aqBody}
-    </div>
-    <div class="card">
       <h3 class="section">Noise sources</h3>
       ${noiseBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Air quality right now (snapshot)</h3>
+      ${aqBody}
     </div>
     <div class="card">
       <h3 class="section">Check the sources yourself</h3>

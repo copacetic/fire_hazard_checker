@@ -261,6 +261,7 @@
       <button class="tab" data-tab="schools" role="tab">Schools</button>
       <button class="tab" data-tab="air" role="tab">Air &amp; Traffic</button>
       <button class="tab" data-tab="move" role="tab">Getting Around</button>
+      <button class="tab" data-tab="safety" role="tab">Safety</button>
     </div>
 
     <div class="tabpanel" id="tab-fire" role="tabpanel">
@@ -280,6 +281,7 @@
     <div class="tabpanel" id="tab-schools" role="tabpanel" hidden></div>
     <div class="tabpanel" id="tab-air" role="tabpanel" hidden></div>
     <div class="tabpanel" id="tab-move" role="tabpanel" hidden></div>
+    <div class="tabpanel" id="tab-safety" role="tabpanel" hidden></div>
   </div>
 
   <footer>
@@ -793,7 +795,8 @@ let lastGeo = null;
 const lazyTabs = {
   schools: { loaded: false, load: loadSchools },
   air:     { loaded: false, load: loadAir },
-  move:    { loaded: false, load: loadMove }
+  move:    { loaded: false, load: loadMove },
+  safety:  { loaded: false, load: loadSafety }
 };
 function renderSchools(geo, district, schools, assigned) {
   const panel = $("tab-schools");
@@ -1058,6 +1061,13 @@ function renderAir(geo, hw, aadt, ces, aq) {
       <h3 class="section">Check the sources yourself</h3>
       <div class="links">${linksHtml}</div>
     </div>`;
+}
+
+async function loadSafety() {
+  if (lazyTabs.safety.loaded || !lastGeo) return;
+  lazyTabs.safety.loaded = true;
+  // Phase 4 (jurisdiction router, LAPD NIBRS, LASD, Glendale links) lands here
+  $("tab-safety").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
 }
 
 /* ================= getting around (Phase 3) ================= */

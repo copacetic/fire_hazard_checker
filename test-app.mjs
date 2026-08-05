@@ -244,7 +244,15 @@ const AADT_I5 = { features: [
 ]}; // verbatim Traffic_AADT 500m ring @ Tyburn
 const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn
 const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd
-const OPENMETEO_OK = { latitude: 34.1, longitude: -118.3, generationtime_ms: 0.21076202392578125, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 117.0, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T12:00", interval: 3600, us_aqi: 66, pm2_5: 19.2, pm10: 23.6, ozone: 99.0, nitrogen_dioxide: 11.9 } }; // verbatim @ Tyburn
+// Multi-location response is a bare ARRAY in request order; only entries after
+// the first carry location_id. Verbatim @ Tyburn + Downtown LA + Santa Monica
+// + Van Nuys (identical values are real — one uniform-basin hour).
+const OPENMETEO_OK = [
+  { latitude: 34.1, longitude: -118.3, generationtime_ms: 0.37729740142822266, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 117.0, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
+  { latitude: 34.0, longitude: -118.2, generationtime_ms: 0.12218952178955078, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 80.0, location_id: 1, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
+  { latitude: 34.0, longitude: -118.5, generationtime_ms: 0.09953975677490234, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 35.0, location_id: 2, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
+  { latitude: 34.200005, longitude: -118.399994, generationtime_ms: 0.09274482727050781, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 220.0, location_id: 3, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } }
+]; // verbatim multi-location capture
 // ===== Phase 3: Getting Around stubs (verbatim, live-captured Aug 2026) =====
 // The canonical EPA layer serves the CURRENT release (12.67 at Tyburn); the
 // AGOL mirror still hosts the older 2010-vintage index (15.167, field D4a).
@@ -331,7 +339,13 @@ const RAIL_P1 = { features: [
   { attributes: { OBJECTID: 269168, RROWNER1: "SCAX", TRKRGHTS1: "AMTK", SUBDIV: "VALLEY (SCAX)", PASSNGR: "B", NET: "M", MILES: 0.39706182230547454 } },
   { attributes: { OBJECTID: 269994, RROWNER1: "SCAX", TRKRGHTS1: "AMTK", SUBDIV: "VALLEY (SCAX)", PASSNGR: "B", NET: "M", MILES: 0.5637763283212474 } }
 ]};
-const AIRPORT_BUR = { features: [{ attributes: { OBJECTID: 5291, CLASS: "65", AIRPORT_NAME: "Burbank", DATE_RECEIVED: "2/4/2025", SOURCE: "Quarterly Noise Monitoring at Bob Hope Airport - 4th Quarter - 2024" } }] };
+// AGOL layer verbatim (70 CNEL ring @ -118.359,34.199) + the old county
+// server's verbatim 65 feature (identical schema) listed FIRST — the app must
+// pick the max CLASS when a point sits in several ring bands
+const AIRPORT_BUR = { features: [
+  { attributes: { OBJECTID: 5291, CLASS: "65", AIRPORT_NAME: "Burbank", DATE_RECEIVED: "2/4/2025", SOURCE: "Quarterly Noise Monitoring at Bob Hope Airport - 4th Quarter - 2024" } },
+  { attributes: { OBJECTID: 11, CLASS: "70", AIRPORT_NAME: "Burbank", DATE_RECEIVED: "5/1/2012", SOURCE: "Quarterly Noise Monitoring at Bob Hope Airport - 4th Quarter - 2011", Shape__Area: 1923149.41015625, Shape__Length: 12272.843337544153 } }
+]};
 async function airRoutes(page, opts = {}) {
   await page.route("**/caltrans-gis.dot.ca.gov/**", r => {
     const u = r.request().url();
@@ -346,7 +360,7 @@ async function airRoutes(page, opts = {}) {
   await page.route("**/CES4/FeatureServer/**", r => json(r, opts.ces || CES_P1));
   await page.route("**/air-quality-api.open-meteo.com/**", r => json(r, OPENMETEO_OK));
   await page.route("**/xOi1kZaI0eWDREZv/**", r => json(r, opts.rail !== undefined ? opts.rail : RAIL_P1));
-  await page.route("**/arcgis.gis.lacounty.gov/**", r => json(r, opts.airport !== undefined ? opts.airport : { features: [] }));
+  await page.route("**/eGIS_Transportation_Hosted_Layers/**", r => json(r, opts.airport !== undefined ? opts.airport : { features: [] }));
 }
 // ===== Phase 5: People stubs (verbatim, live-captured Aug 2026) =====
 const ACS_INC_P1 = { features: [{ attributes: { GEOID: "06037187101", NAME: "Census Tract 1871.01", B19049_001E: 91829, B19049_001M: 24115 } }] };
@@ -419,6 +433,8 @@ async function schoolsBaseRoutes(page) {
   check("SCH: GreatSchools verify link present", (await page.locator('#tab-schools a[href*="greatschools.org"]').count()) >= 1);
   check("SCH: NCES per-school profile link uses NCESSCH", (await page.locator('#tab-schools a[href*="school_detail.asp?Search=1&ID=062271002828"]').count()) === 1);
   check("SCH: NCES district finder link present", (await page.locator('#tab-schools a[href*="nces.ed.gov/ccd/schoolmap"]').count()) === 1);
+  const gsHref = await page.locator('#tab-schools .schoollist:not(#asglist) .schoolrow:first-child a[href*="greatschools.org"]').getAttribute("href");
+  check("GS-FIX: search query drops the state token (trailing CA 404s)", gsHref.includes("search.page?q=Ivanhoe%20Elementary%20Los%20Angeles") && !/%20CA$/.test(gsHref), String(gsHref));
 
   // -- assigned schools (LAUSD 2019-20 boundaries + keycode join) --
   check("ASG: assigned section present", sch.includes("Assigned public schools"));
@@ -607,8 +623,9 @@ async function schoolsBaseRoutes(page) {
   check("AIR: CES traffic 91st percentile", air.includes("91st"));
   check("AIR: CES diesel 89th percentile", air.includes("89th"));
   check("AIR: CES tract id zero-padded + vintage shown", air.includes("06037187101") && air.includes("CalEnviroScreen 4.0"));
-  check("AIR: AQI 66 with Moderate category label", air.includes("66") && air.includes("Moderate"));
+  check("AIR: AQI 67 with Moderate category label", air.includes("67") && air.includes("Moderate"));
   check("AIR: PM2.5 value with units", air.includes("19.2") && air.includes("µg/m³"));
+  check("AIR: LA-wide same-hour AQI comparison inline", air.includes("Across LA this hour") && air.includes("Downtown LA 67") && air.includes("Santa Monica 67") && air.includes("Van Nuys 67"), air.slice(0, 600));
   check("AIR: Open-Meteo CC-BY attribution link", (await page.locator('#tab-air a[href="https://open-meteo.com/"]').count()) === 1);
   check("AIR: AirNow link centered on this address", (await page.locator('#tab-air a[href*="fire.airnow.gov"][href*="lat=34.11268"]').count()) === 1);
   check("AIR: CES official map verify link", (await page.locator('#tab-air a[href*="experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"]').count()) === 1);
@@ -648,7 +665,7 @@ async function schoolsBaseRoutes(page) {
   check("AIR-P2: CES traffic 8th percentile (quiet street)", air.includes("8th"));
   check("AIR-P2: CES tract is the Glendale one", air.includes("6037301300") && air.includes("Glendale"));
   check("AIR-P2: no rail within 1 km honest", air.includes("No rail line within 1 km"));
-  check("AIR-P2: airport contour path renders (Burbank 65 dB CNEL)", air.includes("Burbank") && air.includes("65") && air.includes("CNEL"));
+  check("AIR-P2: airport contour renders with MAX ring (Burbank 70 dB CNEL, not 65)", air.includes("Burbank") && air.includes("70") && air.includes("CNEL") && !air.includes("65 dB CNEL"));
   check("AIR-P2: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
@@ -665,7 +682,7 @@ async function schoolsBaseRoutes(page) {
   await page.route("**/CES4/FeatureServer/**", r => r.abort("failed"));
   await page.route("**/air-quality-api.open-meteo.com/**", r => r.abort("failed"));
   await page.route("**/xOi1kZaI0eWDREZv/**", r => r.abort("failed"));
-  await page.route("**/arcgis.gis.lacounty.gov/**", r => r.abort("failed"));
+  await page.route("**/eGIS_Transportation_Hosted_Layers/**", r => r.abort("failed"));
   await page.goto(appUrl);
   await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
   await page.click("#go");

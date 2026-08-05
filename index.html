@@ -445,7 +445,12 @@ const ACS_HOUSING = ACS_BASE + "ACS_Housing_Units_Occupancy_View_Boundaries/Feat
 // link-out to the official viewer (maps.dot.gov; note www.bts.gov 403s
 // datacenter IPs, don't link or health-check it).
 const RAIL_LINES = "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines/FeatureServer/0/query";
-const AIRPORT_NOISE = "https://arcgis.gis.lacounty.gov/arcgis/rest/services/DRP/Open_Data/MapServer/47/query";
+// County DRP/ALUC airport noise contours — the AGOL-hosted copy (owner
+// lacounty_isd, CORS *). The county's own on-prem server
+// (arcgis.gis.lacounty.gov DRP/Open_Data/MapServer/47) serves the same data
+// but failed intermittently in real browsers — don't switch back to it.
+// Contours are ring-band polygons; a point can sit in several, take max CLASS.
+const AIRPORT_NOISE = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/eGIS_Transportation_Hosted_Layers/FeatureServer/5/query";
 const NOISE_VIEWER = "https://maps.dot.gov/BTS/NationalTransportationNoiseMap/";
 
 // Glendale PD publishes no incident-level open data; these official pages
@@ -753,7 +758,10 @@ async function schoolsNearby(lon, lat) {
 }
 
 function greatSchoolsUrl(name, city) {
-  const q = encodeURIComponent([name, city, "CA"].filter(Boolean).join(" "));
+  // TRAP (verified Aug 2026): search.page 404s whenever the query ends with a
+  // state token — "…Los Angeles CA" → 404, "…Los Angeles" → 200 with results.
+  // So: school name + city only, never the state.
+  const q = encodeURIComponent([name, city].filter(Boolean).join(" "));
   return "https://www.greatschools.org/search/search.page?q=" + q;
 }
 
@@ -1041,14 +1049,31 @@ async function cesLookup(lon, lat) {
   return f ? f.attributes : null;                // null = not inside a scored CA tract
 }
 
+// fixed reference points so the current AQI can be compared across the LA
+// basin in the same hour, from the same model, in ONE request
+const AQ_REFS = [
+  ["Downtown LA", 34.0407, -118.2468],
+  ["Santa Monica", 34.0195, -118.4912],
+  ["Van Nuys", 34.1870, -118.4487]
+];
 async function aqLookup(lon, lat) {
   const u = OPENMETEO_AQ + "?" + new URLSearchParams({
-    latitude: String(lat), longitude: String(lon),
+    latitude: [lat, ...AQ_REFS.map(r => r[1])].join(","),
+    longitude: [lon, ...AQ_REFS.map(r => r[2])].join(","),
     current: "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
     timezone: "America/Los_Angeles"
   });
   const j = await getJSON(u, 12000);
-  return j && j.current ? j.current : null;
+  // multi-location responses are a bare ARRAY in request order (the first
+  // entry carries no location_id); a single-point response is an object
+  const arr = Array.isArray(j) ? j : [j];
+  const cur = arr[0] && arr[0].current;
+  if (!cur) return null;
+  cur.refs = AQ_REFS.map((r, i) => ({
+    name: r[0],
+    aqi: (arr[i + 1] && arr[i + 1].current && arr[i + 1].current.us_aqi != null) ? Math.round(arr[i + 1].current.us_aqi) : null
+  })).filter(r => r.aqi != null);
+  return cur;
 }
 
 /* ---- noise (Phase 6): proximity to rail + airport contours ---- */
@@ -1075,8 +1100,12 @@ async function railLookup(lon, lat) {
 }
 async function airportNoiseLookup(lon, lat) {
   const atts = await queryZoneLayer(AIRPORT_NOISE, lon, lat);
-  const a = atts[0];
-  return a ? { airport: a.AIRPORT_NAME ? String(a.AIRPORT_NAME) : "?", cnel: a.CLASS ? String(a.CLASS) : "?", src: a.SOURCE ? String(a.SOURCE) : null } : null;
+  if (!atts.length) return null;
+  let best = null;
+  for (const a of atts) {
+    if (!best || (parseInt(a.CLASS, 10) || 0) > (parseInt(best.CLASS, 10) || 0)) best = a;
+  }
+  return { airport: best.AIRPORT_NAME ? String(best.AIRPORT_NAME) : "?", cnel: best.CLASS ? String(best.CLASS) : "?", src: best.SOURCE ? String(best.SOURCE) : null };
 }
 
 function aqiCat(v) {
@@ -1122,11 +1151,14 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
     <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract).padStart(11, "0"))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
 
   let aqBody;
-  if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — check AirNow below.</p>`;
+  if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — the service may be briefly unreachable; try again in a minute, and check AirNow below.</p>`;
   else {
     const cat = aqiCat(aq.us_aqi);
     const unitTile = (label, v, unit) => v == null ? "" :
       `<div class="tile"><div class="label">${label}</div><div class="value">${esc(String(v))} <small>${unit}</small></div></div>`;
+    const refsLine = (aq.refs && aq.refs.length)
+      ? `<p class="section-sub" style="margin-top:8px"><strong>Across LA this hour:</strong> ${aq.refs.map(r => esc(r.name) + " " + r.aqi).join(" · ")} — same model, same hour, for comparison with the ${Math.round(aq.us_aqi)} here.</p>`
+      : "";
     aqBody = `
       <div class="tiles">
         <div class="tile"><div class="label">US Air Quality Index</div><div class="value">${Math.round(aq.us_aqi)}</div><div class="note">${badge(cat.st, cat.label)}</div></div>
@@ -1134,7 +1166,8 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
         ${unitTile("Ozone", aq.ozone, "µg/m³")}
         ${unitTile("Nitrogen dioxide", aq.nitrogen_dioxide, "µg/m³")}
       </div>
-      <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
+      ${refsLine}
+      <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local — the CalEnviroScreen percentiles above are the long-term picture. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
   }
 
   // noise card (Phase 6): proximity signals + the official modeled-dB viewer

@@ -97,6 +97,22 @@
   .badge .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; }
   .badge svg { width: 12px; height: 12px; flex: none; }
 
+  /* ---- tabs ---- */
+  .tabs {
+    display: flex; gap: 2px; margin: 2px 0 16px;
+    border-bottom: 1px solid var(--hairline);
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--text-secondary); background: none; border: none;
+    border-bottom: 2px solid transparent; padding: 9px 13px;
+    cursor: pointer; white-space: nowrap; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabpanel[hidden] { display: none; }
+
   /* ---- verdict / result ---- */
   #result { display: none; }
   .matched { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
@@ -161,6 +177,24 @@
   }
   .carrier a.go:hover { border-color: var(--accent); }
 
+  /* ---- schools list ---- */
+  .schoollist { margin-top: 6px; }
+  .schoolrow { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+  .schoolrow:last-child { border-bottom: none; }
+  .srow-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .sname { font-weight: 600; font-size: 14.5px; }
+  .sdist { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 13px; white-space: nowrap; flex: none; }
+  .smeta { font-size: 12.5px; color: var(--text-muted); margin-top: 1px; }
+  .slinks { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 14px; }
+  .slinks a { font-size: 13px; color: var(--accent); text-decoration: none; }
+  .slinks a:hover { text-decoration: underline; }
+  .stag {
+    display: inline-block; font-size: 11px; font-weight: 600;
+    color: var(--text-secondary); border: 1px solid var(--hairline);
+    border-radius: 999px; padding: 1px 7px; vertical-align: 1px; white-space: nowrap;
+  }
+  .stag.other { color: var(--text-muted); border-style: dashed; }
+
   h3.section { font-size: 15.5px; margin: 0 0 4px; }
   .section-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
 
@@ -222,22 +256,39 @@
   <div id="err" class="errbox"></div>
 
   <div id="result">
-    <div class="card" id="verdict-card"></div>
-    <div class="card" id="fires-card" style="display:none"></div>
-    <div class="card">
-      <h3 class="section">Where to get a quote</h3>
-      <p class="section-sub" id="carriers-sub"></p>
-      <div id="carriers"></div>
+    <div class="tabs" id="tabs" role="tablist">
+      <button class="tab active" data-tab="fire" id="tabbtn-fire" role="tab" aria-selected="true" aria-controls="tab-fire">Fire &amp; Insurance</button>
+      <button class="tab" data-tab="schools" id="tabbtn-schools" role="tab" aria-selected="false" aria-controls="tab-schools">Schools</button>
+      <button class="tab" data-tab="air" id="tabbtn-air" role="tab" aria-selected="false" aria-controls="tab-air">Air &amp; Noise</button>
+      <button class="tab" data-tab="move" id="tabbtn-move" role="tab" aria-selected="false" aria-controls="tab-move">Getting Around</button>
+      <button class="tab" data-tab="safety" id="tabbtn-safety" role="tab" aria-selected="false" aria-controls="tab-safety">Safety</button>
+      <button class="tab" data-tab="people" id="tabbtn-people" role="tab" aria-selected="false" aria-controls="tab-people">People</button>
     </div>
-    <div class="card">
-      <h3 class="section">Check the official maps yourself</h3>
-      <div class="links" id="maplinks"></div>
+
+    <div class="tabpanel" id="tab-fire" role="tabpanel" aria-labelledby="tabbtn-fire">
+      <div class="card" id="verdict-card"></div>
+      <div class="card" id="fires-card" style="display:none"></div>
+      <div class="card">
+        <h3 class="section">Where to get a quote</h3>
+        <p class="section-sub" id="carriers-sub"></p>
+        <div id="carriers"></div>
+      </div>
+      <div class="card">
+        <h3 class="section">Check the official maps yourself</h3>
+        <div class="links" id="maplinks"></div>
+      </div>
     </div>
+
+    <div class="tabpanel" id="tab-schools" role="tabpanel" aria-labelledby="tabbtn-schools" hidden></div>
+    <div class="tabpanel" id="tab-air" role="tabpanel" aria-labelledby="tabbtn-air" hidden></div>
+    <div class="tabpanel" id="tab-move" role="tabpanel" aria-labelledby="tabbtn-move" hidden></div>
+    <div class="tabpanel" id="tab-safety" role="tabpanel" aria-labelledby="tabbtn-safety" hidden></div>
+    <div class="tabpanel" id="tab-people" role="tabpanel" aria-labelledby="tabbtn-people" hidden></div>
   </div>
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records. Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. This tool is informational, not insurance or financial advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -261,6 +312,149 @@ const ESRI = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServe
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 // (US Census geocoder removed: it returns no Access-Control-Allow-Origin header,
 //  so browsers can never read its responses — it only produced console CORS errors.)
+
+// ---- Schools (Phase 1) ----
+// NCES EDGE (Nat'l Center for Education Statistics) — keyless, CORS-open ArcGIS
+// hosted services, live-verified Aug 2026. School_Districts_Current is a single
+// composite layer (elementary/secondary/unified polygons together; unified
+// districts like LAUSD/GUSD return one feature per point). Fields: NAME, GEOID,
+// LOGRADE/HIGRADE, SCHOOLYEAR. Public_School_Locations_Current is a point layer
+// of every US public school, queried by radius. Fields: NAME, STREET, CITY,
+// NCESSCH (12-digit federal school id), LEAID (7-digit district id — matches
+// the district's GEOID, which distinguishes district schools from charters).
+// NOTE: it has NO school-level field and NO CA CDS code — level can't be shown,
+// and CA Dashboard per-school links can't be built from this layer.
+const NCES_DISTRICTS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/School_Districts_Current/FeatureServer/0/query";
+const NCES_SCHOOLS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/Public_School_Locations_Current/FeatureServer/0/query";
+
+// ---- Assigned schools (Phase 1b), live-verified Aug 2026 ----
+// LAUSD: LA GeoHub "LAUSD_Schools" MapServer — attendance boundary polygon
+// layers 4 (elementary) / 5 (middle) / 6 (high), 2019-20 school year (the
+// latest LAUSD has published as open data). The polygons carry ONLY a keycode
+// (EKEY_5/MKEY_5/HKEY_5) — school names live in companion keycode TABLES on
+// services5.arcgis.com (note LA's inconsistent "Keycodes"/"Key_Codes" naming).
+// One keycode can resolve to several school rows (magnet centers/dual-language
+// schools share a boundary). Table field CDS is the school's 7-digit CA school
+// code (occasionally null) → "1964733" + CDS = the 14-digit CDS code used by
+// CA Dashboard & CDE Directory per-school pages (both URL patterns verified).
+// Everywhere else: NCES EDGE School Attendance Boundaries Survey 2015-16 —
+// the most recent national survey (since discontinued). openEnroll='1' rows
+// are district-wide open-enrollment polygons, not attendance zones → filtered.
+// SABS's LAUSD coverage is broken (no comprehensive high-school zones), which
+// is why LAUSD routes to the GeoHub layers instead.
+const LAUSD_GEOID = "0622710";
+const LAUSD_BND = "https://maps.lacity.org/lahub/rest/services/LAUSD_Schools/MapServer/";
+const LAUSD_TBL = "https://services5.arcgis.com/7nsPwEMP38bSkCjy/arcgis/rest/services/";
+const LAUSD_LEVELS = [
+  { level: "Elementary", boundary: LAUSD_BND + "4/query", key: "EKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Keycodes_(Elementary_Schools)/FeatureServer/0/query" },
+  { level: "Middle",     boundary: LAUSD_BND + "5/query", key: "MKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Key_Codes_(Middle_Schools)/FeatureServer/0/query" },
+  { level: "High",       boundary: LAUSD_BND + "6/query", key: "HKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Key_Codes_(High_Schools)/FeatureServer/0/query" }
+];
+const SABS = "https://nces.ed.gov/opengis/rest/services/K12_School_Locations/SABS_1516/MapServer/0/query";
+// the RSI app lives at this subpath — the bare rsi.lausd.net root serves a 404
+const RSI_URL = "https://rsi.lausd.net/ResidentSchoolIdentifier/";
+
+// ---- Air & Traffic (Phase 2), live-verified Aug 2026 ----
+// Caltrans GIS (keyless, CORS-open): SHN_Lines is the State Highway Network
+// centerline layer — each carriageway is a separate feature (NB/SB), so
+// dedupe on route name. Traffic_AADT is the Traffic Census count-station
+// layer — ALL its fields are strings (parseInt the AADT numbers), stations
+// also duplicate per carriageway, and there is no year field (it's the
+// latest published Traffic Census year, which runs Oct–Sep).
+const SHN = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/SHN_Lines/FeatureServer/0/query";
+const AADT = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/Traffic_AADT/FeatureServer/0/query";
+// CalEnviroScreen 4.0 tract layer — the service's only layer is /8 (CES4_final,
+// 8035 tracts). Percentiles are 0-100 doubles; unscored tracts use JSON null
+// (never -999) and individual fields can be null independently.
+const CES4 = "https://services.arcgis.com/o6oETlrWetREI1A2/ArcGIS/rest/services/CES4/FeatureServer/8/query";
+const CES_MAP = "https://experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"; // OEHHA's official CES 4.0 map
+// Open-Meteo air quality: keyless, CORS *, CC-BY 4.0 (attribution required);
+// ~10 km model grid, hourly updates.
+const OPENMETEO_AQ = "https://air-quality-api.open-meteo.com/v1/air-quality";
+// CARB Air Quality & Land Use Handbook (the 500-ft freeway advisory) — the
+// old 2021-12 URL 404s; this 2023-05 path is the live one.
+const CARB_HANDBOOK = "https://ww2.arb.ca.gov/sites/default/files/2023-05/Land%20Use%20Handbook_0.pdf";
+
+// ---- Getting Around (Phase 3), live-verified Aug 2026 ----
+// EPA National Walkability Index: the canonical geodata.epa.gov layer now
+// serves the CURRENT release (Tyburn block group scores 12.7, not the 15.2
+// of the old dataset); the ArcGIS Online mirror still hosts the older
+// 2010-vintage index (and lower-cases field D4a) — used only as a fallback,
+// labeled as older data. Sentinel: -99999 = no transit in range.
+const EPA_WALK = "https://geodata.epa.gov/arcgis/rest/services/OA/WalkabilityIndex/MapServer/0/query";
+const EPA_WALK_MIRROR = "https://services2.arcgis.com/j80Jz20at6Bi0thr/ArcGIS/rest/services/National_Walkability_Index/FeatureServer/0/query";
+// LA Metro stops, Dec 2024 GTFS extract (last edited May 2025 — the newest
+// full stop inventory on Metro's org). Only 3 fields (stop_id/stop_name), no
+// lines-served, and ONLY LACMTA: municipal buses (Glendale Beeline, LADOT
+// DASH, Big Blue Bus) are not in this layer — disclaimed in the UI.
+const METRO_STOPS = "https://services5.arcgis.com/7nsPwEMP38bSkCjy/ArcGIS/rest/services/LACMTAstopsDEC24_view/FeatureServer/0/query";
+// Bikeways: LA City DOT inventory (fine-grained; Retire='X' rows are
+// superseded facilities and must be filtered) with Metro's countywide
+// existing-bikeways layer as the fallback outside LA City (covers Glendale;
+// class ints only, names mostly blank).
+const BIKE_LACITY = "https://services1.arcgis.com/tp9wqSVX1AitKgjd/arcgis/rest/services/LA_City_Bikeways/FeatureServer/0/query";
+const BIKE_COUNTY = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/Non_LAC_Bikeways_(Metro_ATSP)/FeatureServer/0/query";
+const EPA_WALK_VIEWER = "https://epa.maps.arcgis.com/home/webmap/viewer.html?webmap=f16f5e2f84884b93b380cfd4be9f0bba";
+
+// ---- Safety (Phase 4), live-verified Aug 2026 ----
+// Jurisdiction router: LA County Planning's city/community boundary layer —
+// 167 polygons covering the county wall-to-wall (88 incorporated cities + 79
+// named unincorporated communities). JURISDICTION is exactly
+// "INCORPORATED CITY" or "UNINCORPORATED AREA"; CITY_COMM_NAME (uppercase)
+// is the always-populated name.
+const JURIS = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/admin_dist_SDE_DIST_DRP_CITY_COMM_BDY/FeatureServer/0/query";
+// LAPD post-NIBRS-transition open data (the famous 2020-2024 dataset is
+// FROZEN at Dec 2024). Trailing 12 months requires BOTH datasets; their
+// schemas differ ONLY in the location field names. within_circle() does NOT
+// work (coords are plain number columns) — numeric bounding box server-side,
+// true-circle trim client-side. Locations are anonymized to the hundred
+// block; one incident can yield several offense rows (dedupe uniquenibrno
+// only across the datasets' calendar overlap).
+const LAPD_2026 = "https://data.lacity.org/resource/k7nn-b2ep.json"; // 2026+: hndrdth_lat/hndrdth_lon/hndrdth_loc_chk
+const LAPD_2425 = "https://data.lacity.org/resource/y8y3-fqfu.json"; // 2024-25: lat/lon/location
+// LASD (unincorporated county + contract cities): YTD + Historical layers,
+// same schema; INCIDENT_DATE is epoch ms; layers overlap a few weeks at the
+// year boundary — dedupe on INCIDENT_ID. The Historical URL needs its
+// literal %20-encoded spaces (the hyphenated alias 400s).
+const LASD_YTD = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/PART_I_AND_II_CRIMES-YTD/FeatureServer/0/query";
+const LASD_HIST = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/Sheriff%20Part%201%20and%202%20Crimes%20(Historical)/FeatureServer/0/query";
+// 2024 crime rates per 100k — CA DOJ "Crimes & Clearances" counts ÷ Census
+// July-2024 city population (Glendale 530 violent & 3,733 property ÷ 187,823;
+// LA 29,089 & 102,289 ÷ 3,878,704). Note: the oft-quoted ~1,484 LA property
+// rate did NOT verify — official counts put it ~2,600/100k.
+const CITY_RATES = {
+  "GLENDALE":    { v: 282, p: 1988 },
+  "LOS ANGELES": { v: 750, p: 2637 }
+};
+// ---- People (Phase 5) + Noise (Phase 6), live-verified Aug 2026 ----
+// Esri Living Atlas "(Latest)" ACS views (owner esri_demographics), keyless,
+// CORS *; layer 2 = census tract. Vintage was ACS 2020-2024 5-year at last
+// verification — the views update in place each December, keeping URLs and
+// field names stable. Estimates can be null (suppressed); tract median
+// income is top-coded at 250001 and home value at 2000001.
+const ACS_BASE = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/";
+const ACS_INCOME = ACS_BASE + "ACS_Median_Household_Income_View_Boundaries/FeatureServer/2/query";
+const ACS_EDU = ACS_BASE + "ACS_Educational_Attainment_View_Boundaries/FeatureServer/2/query";
+const ACS_HOUSING = ACS_BASE + "ACS_Housing_Units_Occupancy_View_Boundaries/FeatureServer/2/query";
+// Noise: the BTS/Esri Transportation Noise raster is TilesOnly (no identify;
+// a point read needs a client-side LERC2 decoder — a dependency this app
+// deliberately doesn't take). Instead: verified proximity fallbacks — the
+// NTAD rail-network layer (CORS *; RROWNER1 SCAX = Metrolink, PASSNGR B =
+// "Amtrak & Commuter", NET M = main line) and LA County's airport
+// noise-contour layer (CNEL dB CLASS; LA County airports only) — plus a
+// link-out to the official viewer (maps.dot.gov; note www.bts.gov 403s
+// datacenter IPs, don't link or health-check it).
+const RAIL_LINES = "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines/FeatureServer/0/query";
+const AIRPORT_NOISE = "https://arcgis.gis.lacounty.gov/arcgis/rest/services/DRP/Open_Data/MapServer/47/query";
+const NOISE_VIEWER = "https://maps.dot.gov/BTS/NationalTransportationNoiseMap/";
+
+// Glendale PD publishes no incident-level open data; these official pages
+// were content-verified via a browser-grade fetch (glendaleca.gov's Akamai
+// edge 403s ALL curl traffic by TLS fingerprint — do not health-check these
+// with curl; they load fine in real browsers).
+const GPD_LIVE = "https://www.glendaleca.gov/government/departments/police-department/crime-prevention-crime-statistics";
+const GPD_STATS = "https://www.glendaleca.gov/government/departments/police-department/community-outreach-resources-and-engagement-c-o-r-e/crime-prevention-programs-resources/crime-statistics-booking-logs";
+const GPD_MAP = "https://www.crimemapping.com/map/agency/136"; // linked as GPD's map by the city's own site
 
 /* ================= severity model ================= */
 const SEV = {
@@ -404,9 +598,11 @@ async function geocode(q) {
   const m = query.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
   if (m) return { lat: +m[1], lon: +m[2], label: "Coordinates " + m[1] + ", " + m[2], src: "coords" };
   // bare street address with no city → assume Glendale (this tool's home turf);
-  // has a city but no state → assume California
-  if (!/ca\b|california/i.test(query)) query += query.includes(",") ? ", CA" : ", Glendale, CA";
-  let netFails = 0;
+  // has a city but no state → assume California. Leading \b matters: without
+  // it, street names ending in "ca" (Seneca, Ithaca…) matched and the
+  // city/state suffix was silently skipped.
+  if (!/\bca\b|california/i.test(query)) query += query.includes(",") ? ", CA" : ", Glendale, CA";
+  let netFails = 0, fails = 0;
 
   // 1) Esri World Geocoder — best coverage AND the same CORS-open ArcGIS
   //    infrastructure as the hazard layers
@@ -415,16 +611,18 @@ async function geocode(q) {
     const j = await getJSON(u, 10000);
     const c = j && j.candidates && j.candidates[0];
     if (c && c.score >= 80 && c.location) return { lat: c.location.y, lon: c.location.x, label: c.address, src: "esri" };
-  } catch (e) { if (isNetErr(e)) netFails++; }
+  } catch (e) { fails++; if (isNetErr(e)) netFails++; }
 
   // 2) Nominatim / OpenStreetMap fallback
   try {
     const u2 = NOMINATIM + "?" + new URLSearchParams({ format: "jsonv2", limit: "1", countrycodes: "us", q: query });
     const j2 = await getJSON(u2, 12000);
     if (Array.isArray(j2) && j2.length) return { lat: +j2[0].lat, lon: +j2[0].lon, label: j2[0].display_name, src: "osm" };
-  } catch (e) { if (isNetErr(e)) netFails++; }
-  // both threw network errors (never got a response) → something is blocking requests
-  throw new Error(netFails >= 2 ? "blocked" : "no-match");
+  } catch (e) { fails++; if (isNetErr(e)) netFails++; }
+  // both died at network level → something is blocking requests; both errored
+  // (e.g. HTTP 5xx) → the services are down, the address was never evaluated
+  if (netFails >= 2) throw new Error("blocked");
+  throw new Error(fails >= 2 ? "geo-down" : "no-match");
 }
 
 function zoneClass(a) {
@@ -446,23 +644,26 @@ async function fhszLookup(lon, lat) {
   // query the statewide layer AND all four official LRA-2025 phase layers; most severe wins
   const settled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat)));
   if (settled.every(s => s.status === "rejected")) throw new Error("all zone layers failed");
+  // some layers failing while others answer must NOT read as a confident
+  // "no zone" — LA City's zones exist only in the phase layers, so a partial
+  // outage could otherwise hide a Very High zone entirely
+  let partial = settled.some(s => s.status === "rejected");
   // NOTE: the official layers also contain non-zone polygons (e.g. "NonWildland",
   // FHSZ = -3) — only codes 1/2/3 are designated hazard zones.
   let best = null;
   for (const s of settled) if (s.status === "fulfilled")
     for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!best || a.FHSZ > best.FHSZ)) best = a;
-  if (best) return { inZone: true, code: best.FHSZ, desc: best.FHSZ_Description || best.FHSZ_Descr, area: best.SRA, cls: zoneClass(best) };
+  if (best) return { inZone: true, code: best.FHSZ, desc: best.FHSZ_Description || best.FHSZ_Descr, area: best.SRA, cls: zoneClass(best), partial };
   // not in a zone — find nearest designated zone in expanding rings (across all layers)
   for (const d of [250, 1000, 3000]) {
-    try {
-      const ringSettled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat, d)));
-      let worst = null;
-      for (const s of ringSettled) if (s.status === "fulfilled")
-        for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!worst || a.FHSZ > worst.FHSZ)) worst = a;
-      if (worst) return { inZone: false, code: 0, nearest: { dist: d, code: worst.FHSZ, cls: zoneClass(worst) } };
-    } catch (e) { break; }
+    const ringSettled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat, d)));
+    partial = partial || ringSettled.some(s => s.status === "rejected");
+    let worst = null;
+    for (const s of ringSettled) if (s.status === "fulfilled")
+      for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!worst || a.FHSZ > worst.FHSZ)) worst = a;
+    if (worst) return { inZone: false, code: 0, nearest: { dist: d, code: worst.FHSZ, cls: zoneClass(worst) }, partial };
   }
-  return { inZone: false, code: 0, nearest: null };
+  return { inZone: false, code: 0, nearest: null, partial };
 }
 
 async function nriLookup(lon, lat) {
@@ -476,19 +677,1038 @@ async function firesLookup(lon, lat) {
     geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
     distance: "5000", units: "esriSRUnit_Meter",
     where: "YEAR_>=2005",
-    outFields: "FIRE_NAME,YEAR_,GIS_ACRES,ALARM_DATE",
+    outFields: "OBJECTID,FIRE_NAME,YEAR_,GIS_ACRES,ALARM_DATE",
     orderByFields: "YEAR_ DESC,GIS_ACRES DESC",
     returnGeometry: "false", resultRecordCount: "40", f: "json"
   });
   const j = await getJSON(u);
   const seen = new Set(), out = [];
   for (const f of (j.features || [])) {
-    const a = f.attributes, k = (a.FIRE_NAME || "?") + "|" + a.YEAR_;
+    const a = f.attributes;
+    // dedupe repeated perimeter records of the same named fire — but never
+    // merge distinct unnamed fires that happen to share a year
+    const k = a.FIRE_NAME ? a.FIRE_NAME + "|" + a.YEAR_ : "obj|" + a.OBJECTID;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push({ name: a.FIRE_NAME || "Unnamed", year: a.YEAR_, acres: a.GIS_ACRES });
   }
+  out.capped = j.exceededTransferLimit === true; // 40-record server cap hit
   return out;
+}
+
+/* ================= schools (Phase 1) ================= */
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function distTxt(m) {
+  if (m == null) return "";
+  return m < 950 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(m < 9500 ? 1 : 0) + " km";
+}
+// trims "…School District" → "…" for compact badges
+function shortDistrict(name) { return String(name).replace(/\s+School District$/i, ""); }
+
+async function districtLookup(lon, lat) {
+  const atts = await queryZoneLayer(NCES_DISTRICTS, lon, lat);
+  const out = [], seen = new Set();
+  for (const a of atts) {
+    if (!a.NAME || seen.has(a.NAME)) continue;
+    seen.add(a.NAME);
+    out.push({
+      name: String(a.NAME),
+      geoid: a.GEOID ? String(a.GEOID) : null,
+      grades: (a.LOGRADE && a.HIGRADE) ? String(a.LOGRADE).trim() + "–" + String(a.HIGRADE).trim() : null,
+      year: a.SCHOOLYEAR ? String(a.SCHOOLYEAR) : null
+    });
+  }
+  return out; // may be empty (address outside any mapped district)
+}
+
+async function schoolsNearby(lon, lat) {
+  const u = NCES_SCHOOLS + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    distance: "1600", units: "esriSRUnit_Meter", spatialRel: "esriSpatialRelIntersects",
+    outFields: "NAME,STREET,CITY,NCESSCH,LEAID,LAT,LON",
+    returnGeometry: "true", outSR: "4326", resultRecordCount: "50", f: "json"
+  });
+  const j = await getJSON(u);
+  const out = [];
+  for (const f of (j.features || [])) {
+    const a = f.attributes || {}, g = f.geometry || {};
+    if (!a.NAME) continue;
+    const slon = g.x != null ? g.x : a.LON, slat = g.y != null ? g.y : a.LAT;
+    out.push({
+      name: String(a.NAME),
+      street: a.STREET ? String(a.STREET) : null,
+      city: a.CITY ? String(a.CITY) : null,
+      ncessch: a.NCESSCH ? String(a.NCESSCH) : null,
+      leaid: a.LEAID ? String(a.LEAID) : null,
+      dist: (slon != null && slat != null) ? haversineM(lat, lon, +slat, +slon) : null
+    });
+  }
+  out.sort((x, y) => (x.dist == null ? 1e12 : x.dist) - (y.dist == null ? 1e12 : y.dist));
+  return out;
+}
+
+function greatSchoolsUrl(name, city) {
+  const q = encodeURIComponent([name, city, "CA"].filter(Boolean).join(" "));
+  return "https://www.greatschools.org/search/search.page?q=" + q;
+}
+
+/* ---- assigned schools ---- */
+// LAUSD keycode tables store the 7-digit CA school code; county 19 + district
+// 64733 prefix makes the 14-digit CDS that Dashboard/CDE pages key on
+function cdsFull(cds7) { return "1964733" + cds7; }
+async function lausdAssigned(lon, lat) {
+  const settled = await Promise.allSettled(LAUSD_LEVELS.map(async lv => {
+    const polys = await queryZoneLayer(lv.boundary, lon, lat);
+    const key = polys.length ? polys[0][lv.key] : null;
+    if (key == null) return { level: lv.level, schools: [] };
+    const j = await getJSON(lv.table + "?" + new URLSearchParams({ where: lv.key + "=" + Number(key), outFields: "*", f: "json" }));
+    const schools = (j.features || []).map(f => f.attributes || {}).filter(a => a.NAME).map(a => ({
+      name: String(a.NAME),
+      // CONFIG is display-ready ("K- 6", "9-12"); grade ints (0 = K) are the fallback
+      grades: a.CONFIG ? String(a.CONFIG).replace(/\s+/g, "").replace("-", "–")
+        : (a.LO_GRD != null && a.HI_GRD != null ? (a.LO_GRD <= 0 ? "K" : a.LO_GRD) + "–" + a.HI_GRD : null),
+      span: (typeof a.HI_GRD === "number" && typeof a.LO_GRD === "number") ? a.HI_GRD - a.LO_GRD : -1,
+      // CDS is an int in the ES table, a string in MS/HS, null for some centers
+      cds: (a.CDS != null && String(a.CDS).trim()) ? String(a.CDS).trim().padStart(7, "0") : null
+    }));
+    schools.sort((x, y) => y.span - x.span); // full-range school before shared-boundary centers
+    return { level: lv.level, schools };
+  }));
+  if (settled.every(s => s.status === "rejected")) throw new Error("assigned lookup failed");
+  return { src: "lausd", levels: settled.map((s, i) =>
+    s.status === "fulfilled" ? s.value : { level: LAUSD_LEVELS[i].level, schools: null }) };
+}
+
+const SABS_LEVELS = { "1": "Elementary", "2": "Middle", "3": "High", "4": "Other" };
+function sabsGrade(g) {
+  if (!g || g === "N") return null;
+  if (g === "KG") return "K";
+  if (g === "PK") return "PreK";
+  return String(parseInt(g, 10) || g);
+}
+async function sabsAssigned(lon, lat) {
+  const u = SABS + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", where: "openEnroll='0'",
+    outFields: "schnam,SrcName,ncessch,leaid,gslo,gshi,level,openEnroll,MultiBdy",
+    returnGeometry: "false", f: "json"
+  });
+  const j = await getJSON(u);
+  const found = [];
+  for (const f of (j.features || [])) {
+    const a = f.attributes || {};
+    if (String(a.openEnroll) !== "0") continue;            // open-enrollment coverage polygon, not a zone
+    const lvlName = SABS_LEVELS[String(a.level)];
+    if (!lvlName) continue;                                // level "N" = preschool/special-ed polygons
+    const name = (a.schnam && String(a.schnam).trim()) || (a.SrcName && String(a.SrcName).trim());
+    if (!name) continue;
+    const lo = sabsGrade(a.gslo), hi = sabsGrade(a.gshi);
+    found.push({
+      order: +a.level, name,
+      ncessch: a.ncessch ? String(a.ncessch) : null,
+      grades: (lo && hi) ? lo + "–" + hi : null,
+      multi: String(a.MultiBdy) === "1"
+    });
+  }
+  const levels = [];
+  for (const code of ["1", "2", "3", "4"]) {
+    const schools = found.filter(s => s.order === +code);
+    if (code === "4" && !schools.length) continue;         // "Other" only when present
+    levels.push({ level: SABS_LEVELS[code], schools });
+  }
+  return { src: "sabs", levels };
+}
+
+function assignedHtml(assigned, isLAUSD) {
+  const head = `<h3 class="section" style="margin-top:18px">Assigned public schools</h3>`;
+  const sub = isLAUSD
+    ? `<p class="section-sub">From LAUSD’s official attendance boundaries, <strong>2019-20 school year</strong> — the latest LAUSD has published as open data. Boundaries change: confirm with LAUSD’s <a href="${RSI_URL}" target="_blank" rel="noopener">Resident School Identifier ↗</a>.</p>`
+    : `<p class="section-sub">From the federal School Attendance Boundaries Survey, <strong>2015-16</strong> — the most recent national collection, so boundaries may have changed since. Always confirm with the district.</p>`;
+  if (!assigned) {
+    return head + sub + `<p class="section-sub">Couldn’t load attendance-boundary data — use the district tools below instead.</p>`;
+  }
+  const levels = assigned.levels || [];
+  if (levels.length && levels.every(l => Array.isArray(l.schools) && !l.schools.length)) {
+    return head + sub + `<p class="section-sub">${assigned.src === "sabs"
+      ? "No attendance boundary contains this address in the 2015-16 survey — the district may not have participated. Use the finder links below."
+      : "No LAUSD attendance boundary contains this address — confirm with the Resident School Identifier."}</p>`;
+  }
+  const rows = levels.map(l => {
+    if (l.schools === null) return `<div class="schoolrow">
+      <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> Couldn’t load</span></div>
+      <div class="smeta">The boundary service didn’t respond for this level</div></div>`;
+    if (!l.schools.length) return `<div class="schoolrow">
+      <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> Not determined</span></div>
+      <div class="smeta">No boundary for this level here — confirm with the district</div></div>`;
+    return l.schools.map(s => {
+      const links = [];
+      if (s.cds) {
+        links.push(`<a href="https://www.caschooldashboard.org/reports/${esc(cdsFull(s.cds))}" target="_blank" rel="noopener">CA Dashboard ↗</a>`);
+        links.push(`<a href="https://www.cde.ca.gov/SchoolDirectory/details?cdscode=${esc(cdsFull(s.cds))}" target="_blank" rel="noopener">CDE profile ↗</a>`);
+      }
+      if (s.ncessch) links.push(`<a href="https://nces.ed.gov/ccd/schoolsearch/school_detail.asp?Search=1&ID=${esc(s.ncessch)}" target="_blank" rel="noopener">NCES profile ↗</a>`);
+      links.push(`<a href="${greatSchoolsUrl(s.name, assigned.src === "lausd" ? "Los Angeles" : null)}" target="_blank" rel="noopener">GreatSchools ↗</a>`);
+      return `<div class="schoolrow">
+        <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> ${esc(s.name)}</span>${s.grades ? `<span class="sdist">${esc(s.grades)}</span>` : ""}</div>
+        ${s.multi ? `<div class="smeta">This school’s boundary differs by grade — verify with the district</div>` : ""}
+        <div class="slinks">${links.join("")}</div>
+      </div>`;
+    }).join("");
+  }).join("");
+  return head + sub + `<div class="schoollist" id="asglist">${rows}</div>`;
+}
+
+// lazy tabs: each panel loads on first open after a search, resets on the next search
+let lastGeo = null;
+const lazyTabs = {
+  schools: { loaded: false, load: loadSchools },
+  air:     { loaded: false, load: loadAir },
+  move:    { loaded: false, load: loadMove },
+  safety:  { loaded: false, load: loadSafety },
+  people:  { loaded: false, load: loadPeople }
+};
+function renderSchools(geo, district, schools, assigned) {
+  const panel = $("tab-schools");
+  const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
+
+  // 1) district block
+  let distHtml;
+  if (district && district.length) {
+    const names = district.map(d => esc(d.name)).join(" · ");
+    const d0 = district[0];
+    const detail = [d0.grades ? "grades " + esc(d0.grades) : null, d0.year ? "NCES " + esc(d0.year) : null].filter(Boolean).join(" · ");
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:16px">${names}</div>
+      <div class="note">The district whose boundary contains this address${detail ? " · " + detail : ""}</div></div>`;
+  } else if (district) {
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:15px">Not determined</div>
+      <div class="note">No NCES district boundary matched — confirm with the finder link below</div></div>`;
+  } else {
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:15px">Couldn’t load</div>
+      <div class="note">The NCES district service didn’t respond — use the finder link below</div></div>`;
+  }
+
+  // 2) assigned schools (attendance boundaries — the schools this home is zoned for)
+  const asgHtml = assignedHtml(assigned, isLAUSD);
+
+  // 3) nearby schools table
+  let nearbyHtml;
+  if (schools && schools.length) {
+    const districtIds = new Set((district || []).map(d => d.geoid).filter(Boolean));
+    const rows = schools.slice(0, 10).map(s => {
+      const links = [`<a href="${greatSchoolsUrl(s.name, s.city)}" target="_blank" rel="noopener">GreatSchools ↗</a>`];
+      // NCESSCH → the federal per-school profile page (verified URL pattern)
+      if (s.ncessch) links.push(`<a href="https://nces.ed.gov/ccd/schoolsearch/school_detail.asp?Search=1&ID=${esc(s.ncessch)}" target="_blank" rel="noopener">NCES profile ↗</a>`);
+      // LEAID matches the district's GEOID for district-run schools; charters
+      // and other districts' schools carry a different LEAID
+      const tag = districtIds.size && s.leaid
+        ? (districtIds.has(s.leaid)
+            ? `<span class="stag">${esc(shortDistrict((district.find(d => d.geoid === s.leaid) || district[0]).name))}</span>`
+            : `<span class="stag other">charter / other district</span>`)
+        : "";
+      const meta = [s.street, s.city].filter(Boolean).map(esc).join(", ");
+      return `<div class="schoolrow">
+        <div class="srow-top"><span class="sname">${esc(s.name)} ${tag}</span><span class="sdist">${s.dist != null ? esc(distTxt(s.dist)) : ""}</span></div>
+        ${meta ? `<div class="smeta">${meta}</div>` : ""}
+        <div class="slinks">${links.join("")}</div>
+      </div>`;
+    }).join("");
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.</p>
+      <div class="schoollist">${rows}</div>
+      ${schools.length > 10 ? `<p class="section-sub" style="margin-top:8px">+ ${schools.length - 10} more within a mile</p>` : ""}`;
+  } else if (schools) {
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">No public schools found within a mile of this point in the NCES locations layer.</p>`;
+  } else {
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">Couldn’t load the NCES school-locations service — try the finder links below.</p>`;
+  }
+
+  // 4) authoritative link-outs (always shown — these are the definitive tools)
+  const links = [];
+  if (isLAUSD) links.push([
+    "LAUSD Resident School Identifier ↗", RSI_URL,
+    "LA Unified’s official tool — enter the address for its exact assigned elementary, middle & high schools"
+  ]);
+  links.push([
+    "NCES School District boundary finder ↗", "https://nces.ed.gov/ccd/schoolmap/",
+    "Federal map — confirm the district and browse schools around any address"
+  ]);
+  links.push([
+    "GreatSchools — search this area ↗", greatSchoolsUrl(geo.label && geo.label.split(",")[1] ? geo.label.split(",")[1].trim() : "", ""),
+    "Parent reviews and 1–10 ratings"
+  ]);
+  links.push([
+    "California School Dashboard ↗", "https://www.caschooldashboard.org/",
+    "The state’s official accountability data by school and district"
+  ]);
+  links.push([
+    "Niche — K-12 schools ↗", "https://www.niche.com/k12/search/best-schools/?state=CA",
+    "Independent grades combining test scores, reviews and outcomes"
+  ]);
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${esc(t)}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  panel.innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <div class="tiles">${distHtml}</div>
+      ${asgHtml}
+      ${nearbyHtml}
+    </div>
+    <div class="card">
+      <h3 class="section">Confirm assigned schools &amp; ratings</h3>
+      <p class="section-sub">Assignment is set by attendance boundaries, which change — always verify with the official district tool.</p>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+async function loadSchools() {
+  if (lazyTabs.schools.loaded || !lastGeo) return;
+  lazyTabs.schools.loaded = true;
+  const geo = lastGeo;
+  $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up district, assigned schools &amp; nearby schools…</span></div></div>`;
+  const [dR, sR] = await Promise.allSettled([
+    districtLookup(geo.lon, geo.lat),
+    schoolsNearby(geo.lon, geo.lat)
+  ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
+  const district = dR.status === "fulfilled" ? dR.value : null;
+  // which attendance-boundary source applies depends on the district result,
+  // so this second hop is sequential by design
+  const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
+  let assigned = null;
+  try { assigned = await (isLAUSD ? lausdAssigned(geo.lon, geo.lat) : sabsAssigned(geo.lon, geo.lat)); }
+  catch (e) { /* assigned stays null → honest "couldn't load" label */ }
+  if (geo !== lastGeo) return;
+  renderSchools(geo, district,
+    sR.status === "fulfilled" ? sR.value : null,
+    assigned);
+}
+/* ================= air & traffic (Phase 2) ================= */
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+const ROUTE_PREFIX = { Interstate: "I-", State: "SR-", US: "US-" };
+
+async function highwayLookup(lon, lat) {
+  for (const d of [200, 500, 1000]) {
+    const atts = await queryZoneLayer(SHN, lon, lat, d);
+    if (atts.length) {
+      const seen = new Set(), routes = [];
+      for (const a of atts) {
+        const name = (ROUTE_PREFIX[a.RouteType] || "") + (a.RouteS || a.Route || "");
+        if (!name || seen.has(name)) continue;   // NB/SB carriageways are separate features
+        seen.add(name);
+        routes.push(name);
+      }
+      if (routes.length) return { dist: d, routes };
+    }
+  }
+  return { dist: null, routes: [] };
+}
+
+async function aadtLookup(lon, lat) {
+  const atts = await queryZoneLayer(AADT, lon, lat, 1000);
+  const seen = new Set(), stations = [];
+  for (const a of atts) {
+    const k = (a.RTE || "") + "|" + (a.PM || "") + "|" + (a.DESCRIPTION || "");
+    if (seen.has(k)) continue;                   // stations duplicate per carriageway
+    seen.add(k);
+    const back = parseInt(a.BACK_AADT, 10) || 0, ahead = parseInt(a.AHEAD_AADT, 10) || 0;
+    const aadt = Math.max(back, ahead);
+    if (!aadt) continue;
+    stations.push({ route: a.RTE ? "Route " + a.RTE : null, desc: a.DESCRIPTION ? String(a.DESCRIPTION) : null, aadt });
+  }
+  stations.sort((x, y) => y.aadt - x.aadt);
+  return stations;
+}
+
+async function cesLookup(lon, lat) {
+  const j = await getJSON(arcgisPointQuery(CES4, lon, lat, {
+    outFields: "Tract,CIscore,CIscoreP,Traffic_Pctl,Diesel_PM_Pctl,PM2_5_Pctl,Ozone_Pctl,Asthma_Pctl,County,ApproxLoc,Population"
+  }));
+  const f = (j.features || [])[0];
+  return f ? f.attributes : null;                // null = not inside a scored CA tract
+}
+
+async function aqLookup(lon, lat) {
+  const u = OPENMETEO_AQ + "?" + new URLSearchParams({
+    latitude: String(lat), longitude: String(lon),
+    current: "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
+    timezone: "America/Los_Angeles"
+  });
+  const j = await getJSON(u, 12000);
+  return j && j.current ? j.current : null;
+}
+
+/* ---- noise (Phase 6): proximity to rail + airport contours ---- */
+async function railLookup(lon, lat) {
+  const j = await getJSON(RAIL_LINES + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", distance: "1000", units: "esriSRUnit_Meter",
+    outFields: "RROWNER1,TRKRGHTS1,SUBDIV,PASSNGR,NET,MILES",
+    returnGeometry: "false", f: "json"
+  }));
+  const feats = (j.features || []).map(f => f.attributes || {});
+  // NET "M" = main line (the noise that matters); S/O = sidings & spurs
+  const mains = feats.filter(a => a.NET === "M");
+  const pick = mains[0] || feats[0] || null;
+  if (!pick) return { any: false };
+  const owner = { SCAX: "Metrolink", BNSF: "BNSF", UP: "Union Pacific", ATK: "Amtrak", AMTK: "Amtrak" }[pick.RROWNER1] || pick.RROWNER1 || "";
+  return {
+    any: true, main: !!mains.length,
+    owner: String(owner),
+    subdiv: pick.SUBDIV ? titleCase(String(pick.SUBDIV).replace(/\s*\(.*\)\s*$/, "")) : null,
+    passenger: pick.PASSNGR === "B",           // "B" = Amtrak & commuter service
+    amtrak: pick.TRKRGHTS1 === "AMTK"
+  };
+}
+async function airportNoiseLookup(lon, lat) {
+  const atts = await queryZoneLayer(AIRPORT_NOISE, lon, lat);
+  const a = atts[0];
+  return a ? { airport: a.AIRPORT_NAME ? String(a.AIRPORT_NAME) : "?", cnel: a.CLASS ? String(a.CLASS) : "?", src: a.SOURCE ? String(a.SOURCE) : null } : null;
+}
+
+function aqiCat(v) {
+  if (v <= 50)  return { st: "good",     label: "Good" };
+  if (v <= 100) return { st: "warning",  label: "Moderate" };
+  if (v <= 150) return { st: "serious",  label: "Unhealthy for sensitive groups" };
+  if (v <= 200) return { st: "critical", label: "Unhealthy" };
+  if (v <= 300) return { st: "critical", label: "Very unhealthy" };
+  return { st: "critical", label: "Hazardous" };
+}
+
+function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
+  const distLabel = { 200: "within ~200 m", 500: "within ~500 m", 1000: "within ~1 km" };
+
+  let hwTile;
+  if (!hw) hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The Caltrans highway service didn’t respond</div></div>`;
+  else if (!hw.routes.length) hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:15px">None within 1 km</div><div class="note">No state highway, freeway or interstate within 1 km (Caltrans SHN)</div></div>`;
+  else hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:17px">${esc(hw.routes.join(" · "))}</div><div class="note">${distLabel[hw.dist]} of this address (Caltrans SHN)</div></div>`;
+
+  let aadtTile;
+  if (!aadt) aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The Caltrans Traffic Census service didn’t respond</div></div>`;
+  else if (!aadt.length) aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value" style="font-size:15px">None within 1 km</div><div class="note">No Caltrans count station within 1 km</div></div>`;
+  else aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value">${aadt[0].aadt.toLocaleString()} <small>veh/day</small></div><div class="note">${esc([aadt[0].desc, aadt[0].route].filter(Boolean).join(" — "))} · latest Caltrans Traffic Census</div></div>`;
+
+  const carbBox = (hw && hw.routes.length && hw.dist <= 500)
+    ? `<div class="warnbox">A freeway or state highway is ${distLabel[hw.dist]}. CARB’s land-use guidance advises against siting new homes within 500 ft (~150 m) of a freeway — traffic pollution drops off sharply beyond that. <a href="${CARB_HANDBOOK}" target="_blank" rel="noopener">CARB handbook (PDF) ↗</a></div>`
+    : "";
+
+  const pctlTile = (label, v, note) => v == null
+    ? `<div class="tile"><div class="label">${label}</div><div class="value" style="font-size:15px">No score</div><div class="note">Not scored for this tract</div></div>`
+    : `<div class="tile"><div class="label">${label}</div><div class="value">${ordinal(Math.round(v))}</div><div class="note">${note}</div></div>`;
+  let cesBody;
+  if (!ces) cesBody = `<p class="section-sub">Couldn’t load CalEnviroScreen — check the official map below.</p>`;
+  else if (ces.none) cesBody = `<p class="section-sub">This location isn’t inside a scored CalEnviroScreen tract (only California census tracts are scored).</p>`;
+  else cesBody = `
+    <p class="section-sub">Percentile across all 8,035 California tracts — <strong>higher = more pollution-burdened</strong>.</p>
+    <div class="tiles">
+      ${pctlTile("Overall burden", ces.CIscoreP, "pollution burden + population vulnerability combined")}
+      ${pctlTile("Traffic density", ces.Traffic_Pctl, "vehicle traffic on roads near the tract")}
+      ${pctlTile("Diesel particulates", ces.Diesel_PM_Pctl, "diesel PM emissions nearby")}
+      ${pctlTile("Fine particles (PM2.5)", ces.PM2_5_Pctl, "annual fine-particle concentration")}
+    </div>
+    <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract).padStart(11, "0"))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
+
+  let aqBody;
+  if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — check AirNow below.</p>`;
+  else {
+    const cat = aqiCat(aq.us_aqi);
+    const unitTile = (label, v, unit) => v == null ? "" :
+      `<div class="tile"><div class="label">${label}</div><div class="value">${esc(String(v))} <small>${unit}</small></div></div>`;
+    aqBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">US Air Quality Index</div><div class="value">${Math.round(aq.us_aqi)}</div><div class="note">${badge(cat.st, cat.label)}</div></div>
+        ${unitTile("Fine particles PM2.5", aq.pm2_5, "µg/m³")}
+        ${unitTile("Ozone", aq.ozone, "µg/m³")}
+        ${unitTile("Nitrogen dioxide", aq.nitrogen_dioxide, "µg/m³")}
+      </div>
+      <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
+  }
+
+  // noise card (Phase 6): proximity signals + the official modeled-dB viewer
+  let noiseBody;
+  {
+    const parts = [];
+    if (rail === null) parts.push(`<p class="section-sub">Couldn’t load the federal rail-network layer.</p>`);
+    else if (rail && rail.any) {
+      const who = [rail.owner, rail.amtrak ? "with Amtrak trackage rights" : null].filter(Boolean).join(" ");
+      parts.push(`<div class="warnbox">${rail.main ? "An active rail <strong>main line</strong>" : "A rail siding or spur"} runs within 1 km${who ? " — " + esc(who) : ""}${rail.subdiv ? " (" + esc(rail.subdiv) + " subdivision)" : ""}${rail.passenger ? ", carrying Amtrak &amp; commuter service" : ""}. ${rail.main ? "Expect regular train and horn noise — visit at different times of day." : ""}</div>`);
+    } else if (rail) parts.push(`<p class="section-sub">No rail line within 1 km (federal rail network).</p>`);
+    if (apn === undefined) parts.push(`<p class="section-sub">Couldn’t load the LA County airport-noise layer.</p>`);
+    else if (apn) parts.push(`<div class="warnbox">Inside the <strong>${esc(apn.airport)}</strong> airport ${esc(apn.cnel)} dB CNEL noise contour${apn.src ? " (" + esc(apn.src) + ")" : ""}.</div>`);
+    else parts.push(`<p class="section-sub">Not inside any LA County airport noise contour.</p>`);
+    if (hw && hw.routes.length && hw.dist <= 500) parts.push(`<p class="section-sub">The ${esc(hw.routes.join("/"))} freeway noted above is also a noise source at this range.</p>`);
+    noiseBody = parts.join("");
+  }
+
+  const links = [
+    ["National Transportation Noise Map ↗", NOISE_VIEWER, "Official USDOT viewer — search the address to see modeled road/rail/aviation noise in dB"],
+    ["AirNow Fire &amp; Smoke map at this location ↗", `https://fire.airnow.gov/?lat=${geo.lat}&lng=${geo.lon}&zoom=11`, "EPA’s official live air-quality map, centered on this address"],
+    ["CalEnviroScreen 4.0 map ↗", CES_MAP, "OEHHA’s official map — search the address to verify the tract percentiles"],
+    ["Caltrans Traffic Census ↗", "https://dot.ca.gov/programs/traffic-operations/census", "The AADT program behind the traffic-volume figure"],
+    ["CARB Air Quality &amp; Land Use Handbook (PDF) ↗", CARB_HANDBOOK, "The state guidance on siting homes near freeways (500-ft advisory)"]
+  ];
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  $("tab-air").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Traffic &amp; freeway exposure</h3>
+      <div class="tiles">${hwTile}${aadtTile}</div>
+      ${carbBox}
+    </div>
+    <div class="card">
+      <h3 class="section">Neighborhood pollution burden</h3>
+      ${cesBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Air quality right now</h3>
+      ${aqBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Noise sources</h3>
+      ${noiseBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+/* ================= people (Phase 5) ================= */
+async function acsLookup(lon, lat) {
+  const q = (base, outFields) => getJSON(arcgisPointQuery(base, lon, lat, { outFields }))
+    .then(j => { const f = (j.features || [])[0]; return f ? f.attributes : null; });
+  const [inc, edu, hou] = await Promise.allSettled([
+    q(ACS_INCOME, "GEOID,NAME,B19049_001E,B19049_001M"),
+    q(ACS_EDU, "GEOID,NAME,B15002_001E,B15002_calc_numGEBAE,B15002_calc_pctGEBAE"),
+    q(ACS_HOUSING, "GEOID,NAME,B25003_001E,B25003_002E,B25003_calc_pctOwnE,B25077_001E")
+  ]);
+  if ([inc, edu, hou].every(s => s.status === "rejected")) throw new Error("acs failed");
+  const v = s => s.status === "fulfilled" ? s.value : undefined; // undefined = that service failed
+  return { inc: v(inc), edu: v(edu), hou: v(hou) };
+}
+// tract estimates are top-coded: 250001 = ">$250k" income, 2000001 = ">$2M" home value
+function dollars(v, topCode, topLabel) {
+  if (v == null) return null;
+  if (topCode && v >= topCode) return topLabel;
+  return "$" + Math.round(v).toLocaleString();
+}
+
+function renderPeople(geo, acs) {
+  let body, geoid = null, tractName = null;
+  if (!acs) body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
+  else {
+    const any = acs.inc || acs.edu || acs.hou;
+    if (acs.inc === null && acs.edu === null && acs.hou === null) {
+      body = `<p class="section-sub">No census tract found at this location.</p>`;
+    } else if (!any) {
+      body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
+    } else {
+      geoid = (any.GEOID != null) ? String(any.GEOID) : null;
+      tractName = (any.NAME != null) ? String(any.NAME) : null;
+      const tile = (label, value, note) => `<div class="tile"><div class="label">${label}</div>
+        <div class="value" style="font-size:19px">${value}</div>${note ? `<div class="note">${note}</div>` : ""}</div>`;
+      const failTile = label => tile(label, "Couldn’t load", "This census service didn’t respond");
+      const noneTile = label => tile(label, "No estimate", "Suppressed or unavailable for this tract");
+
+      const incTile = acs.inc === undefined ? failTile("Median household income")
+        : (acs.inc && acs.inc.B19049_001E != null)
+          ? tile("Median household income", esc(dollars(acs.inc.B19049_001E, 250001, ">$250k")),
+              acs.inc.B19049_001M != null ? "± $" + Math.round(acs.inc.B19049_001M).toLocaleString() + " margin of error" : "")
+          : noneTile("Median household income");
+      const eduTile = acs.edu === undefined ? failTile("Bachelor’s degree or higher")
+        : (acs.edu && acs.edu.B15002_calc_pctGEBAE != null)
+          ? tile("Bachelor’s degree or higher", esc(acs.edu.B15002_calc_pctGEBAE + "%"), "of residents 25 and older")
+          : noneTile("Bachelor’s degree or higher");
+      const ownTile = acs.hou === undefined ? failTile("Owner-occupied homes")
+        : (acs.hou && acs.hou.B25003_calc_pctOwnE != null)
+          ? tile("Owner-occupied homes", esc(acs.hou.B25003_calc_pctOwnE + "%"), "of occupied housing units")
+          : noneTile("Owner-occupied homes");
+      const valTile = acs.hou === undefined ? failTile("Median home value")
+        : (acs.hou && acs.hou.B25077_001E != null)
+          ? tile("Median home value", esc(dollars(acs.hou.B25077_001E, 2000001, ">$2M")), "owner-occupied units, self-reported")
+          : noneTile("Median home value");
+      body = `<div class="tiles">${incTile}${eduTile}${ownTile}${valTile}</div>
+        <p class="section-sub" style="margin-top:8px">${tractName ? esc(tractName) + " · " : ""}Census ACS 5-year estimates (latest release — 2020-2024 at last verification). Tract-level estimates carry real margins of error; treat them as a picture of the immediate neighborhood, not the block.</p>`;
+    }
+  }
+
+  const links = [];
+  if (geoid) links.push(["Full tract profile on Census Reporter ↗", "https://censusreporter.org/profiles/14000US" + geoid + "/",
+    "Independent, readable breakdown of every ACS statistic for this exact tract"]);
+  links.push(["Internet options at this address (FCC Broadband Map) ↗",
+    `https://broadbandmap.fcc.gov/location-summary/fixed?lon=${geo.lon}&lat=${geo.lat}&zoom=15`,
+    "Official FCC map of wired &amp; wireless providers serving this location"]);
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${d}</div></div>`).join("");
+
+  $("tab-people").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Who lives here (census tract)</h3>
+      ${body}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+async function loadPeople() {
+  if (lazyTabs.people.loaded || !lastGeo) return;
+  lazyTabs.people.loaded = true;
+  const geo = lastGeo;
+  $("tab-people").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up census-tract demographics…</span></div></div>`;
+  let acs = null;
+  try { acs = await acsLookup(geo.lon, geo.lat); } catch (e) {}
+  if (geo !== lastGeo) return; // a new search started — never render stale data
+  renderPeople(geo, acs);
+}
+
+/* ================= safety (Phase 4) ================= */
+function isoDaysAgo(days) {
+  return new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
+}
+// "594(B)(1) - PC - F - Vandalism ($400 Or More) - Felony - 290" → the readable middle
+function nibrsDesc(s) {
+  const t = String(s).replace(/\s+-\s+\w+$/, "").replace(/^.*? - [A-Z]{2,3} - [A-Z] - /, "");
+  return t || String(s);
+}
+
+async function jurisdictionLookup(lon, lat) {
+  const atts = await queryZoneLayer(JURIS, lon, lat);
+  const a = atts[0];
+  if (!a || !a.CITY_COMM_NAME) return { none: true }; // outside LA County
+  return { name: String(a.CITY_COMM_NAME), incorporated: a.JURISDICTION === "INCORPORATED CITY" };
+}
+
+async function lapdLookup(lon, lat) {
+  const cutoff = isoDaysAgo(365) + "T00:00:00";
+  const dLat = 500 / 111320, dLon = 500 / (111320 * Math.cos(lat * Math.PI / 180));
+  const q = (base, latF, lonF) => getJSON(base + "?" + new URLSearchParams({
+    "$where": `${latF} between ${lat - dLat} and ${lat + dLat} AND ${lonF} between ${lon - dLon} and ${lon + dLon} AND date_occ >= '${cutoff}'`,
+    "$order": "date_occ DESC", "$limit": "500"
+  }));
+  const settled = await Promise.allSettled([
+    q(LAPD_2026, "hndrdth_lat", "hndrdth_lon"),
+    q(LAPD_2425, "lat", "lon")
+  ]);
+  if (settled.every(s => s.status === "rejected")) throw new Error("lapd failed");
+  const seen = new Set(), rows = [];
+  const take = (recs, latF, lonF, locF) => {
+    for (const r of (recs || [])) {
+      const rlat = +r[latF], rlon = +r[lonF];
+      if (!rlat || !rlon) continue;                          // anonymized rows can have 0/null coords
+      if (haversineM(lat, lon, rlat, rlon) > 500) continue;  // bbox → true circle
+      const id = r.uniquenibrno || (r.caseno + "|" + r.nibr_code);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      rows.push({ date: String(r.date_occ || "").slice(0, 10), desc: nibrsDesc(r.nibr_description), addr: r[locF] ? String(r[locF]) : null, against: r.crime_against ? String(r.crime_against) : null });
+    }
+  };
+  if (settled[0].status === "fulfilled") take(settled[0].value, "hndrdth_lat", "hndrdth_lon", "hndrdth_loc_chk");
+  if (settled[1].status === "fulfilled") take(settled[1].value, "lat", "lon", "location");
+  rows.sort((x, y) => y.date < x.date ? -1 : 1);
+  // a dataset returning exactly $limit rows means the true count is higher
+  rows.capped = settled.some(s => s.status === "fulfilled" && Array.isArray(s.value) && s.value.length >= 500);
+  return { rows, partial: settled.some(s => s.status === "rejected") };
+}
+
+async function lasdLookup(lon, lat) {
+  const q = base => getJSON(base + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", distance: "500", units: "esriSRUnit_Meter",
+    where: "INCIDENT_DATE >= TIMESTAMP '" + isoDaysAgo(365) + " 00:00:00'",
+    outFields: "INCIDENT_DATE,CATEGORY,STAT_DESC,STREET,CITY,PART_CATEGORY,INCIDENT_ID",
+    orderByFields: "INCIDENT_DATE DESC", resultRecordCount: "500",
+    returnGeometry: "false", f: "json"
+  }));
+  const settled = await Promise.allSettled([q(LASD_YTD), q(LASD_HIST)]);
+  if (settled.every(s => s.status === "rejected")) throw new Error("lasd failed");
+  const seen = new Set(), rows = [];
+  for (const s of settled) if (s.status === "fulfilled")
+    for (const f of (s.value.features || [])) {
+      const a = f.attributes || {};
+      const id = a.INCIDENT_ID || JSON.stringify(a);
+      if (seen.has(id)) continue;                            // YTD & Historical overlap at the year boundary
+      seen.add(id);
+      rows.push({
+        date: a.INCIDENT_DATE ? new Date(a.INCIDENT_DATE).toISOString().slice(0, 10) : "",
+        desc: a.STAT_DESC ? titleCase(String(a.STAT_DESC)) : (a.CATEGORY ? titleCase(String(a.CATEGORY)) : "—"),
+        addr: a.STREET ? titleCase(String(a.STREET)) : null,
+        part: String(a.PART_CATEGORY || "")
+      });
+    }
+  rows.sort((x, y) => y.date < x.date ? -1 : 1);
+  rows.capped = settled.some(s => s.status === "fulfilled" && s.value && s.value.exceededTransferLimit === true);
+  return { rows, partial: settled.some(s => s.status === "rejected") };
+}
+
+function incidentRows(rows, n) {
+  return rows.slice(0, n).map(r => `<div class="schoolrow">
+    <div class="srow-top"><span class="sname" style="font-weight:500">${esc(r.desc)}</span><span class="sdist">${esc(r.date)}</span></div>
+    ${r.addr ? `<div class="smeta">${esc(r.addr)}</div>` : ""}
+  </div>`).join("");
+}
+
+function renderSafety(geo, juris, data) {
+  // 1) jurisdiction card
+  let jHtml;
+  if (!juris) jHtml = `<p class="section-sub">Couldn’t load the LA County boundary service — jurisdiction unknown. Use the links below.</p>`;
+  else if (juris.none) jHtml = `<p class="section-sub">This address is outside LA County — this tab’s police-data sources cover LA County only.</p>`;
+  else {
+    const served = !juris.incorporated ? "Unincorporated LA County — served by the LA County Sheriff’s Dept."
+      : juris.name === "LOS ANGELES" ? "Incorporated city — served by LAPD"
+      : juris.name === "GLENDALE" ? "Incorporated city — served by the Glendale Police Dept."
+      : "Incorporated city with its own police department";
+    jHtml = `<div class="tiles"><div class="tile"><div class="label">Police jurisdiction</div>
+      <div class="value" style="font-size:17px">${esc(titleCase(juris.name))}</div>
+      <div class="note">${esc(served)}</div></div></div>`;
+  }
+
+  // 2) incidents / links card, by jurisdiction kind
+  let body = "";
+  if (data && data.kind === "lapd") {
+    if (data.failed) body = `<h3 class="section">Reported offenses nearby (LAPD)</h3>
+      <p class="section-sub">Couldn’t load the LAPD open-data service — use the dataset links below.</p>`;
+    else {
+      const buckets = { Person: 0, Property: 0, Society: 0 };
+      for (const r of data.rows) for (const b of String(r.against || "").split(/,\s*/)) if (buckets[b] != null) buckets[b]++;
+      body = `<h3 class="section">Reported offenses nearby (LAPD)</h3>
+        <div class="tiles"><div class="tile"><div class="label">Offenses within 500 m · last 12 months</div>
+          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
+          <div class="note">Against people ×${buckets.Person} · property ×${buckets.Property} · society ×${buckets.Society}</div></div></div>
+        ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No offenses recorded within 500 m in the last 12 months.</p>`}
+        ${data.partial ? `<div class="warnbox">One of the two LAPD datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
+        <p class="section-sub" style="margin-top:8px">Locations are anonymized to the hundred block; one incident can appear as several offense records (and an offense can count against multiple categories); publication runs ~2 weeks behind. LAPD NIBRS datasets, LA City open data.</p>`;
+    }
+  } else if (data && data.kind === "lasd") {
+    if (data.failed) body = `<h3 class="section">Reported crimes nearby (LA Sheriff)</h3>
+      <p class="section-sub">Couldn’t load the Sheriff’s open-data service — use the links below.</p>`;
+    else {
+      const p1 = data.rows.filter(r => r.part === "1").length, p2 = data.rows.filter(r => r.part === "2").length;
+      body = `<h3 class="section">Reported crimes nearby (LA Sheriff)</h3>
+        <div class="tiles"><div class="tile"><div class="label">Incidents within 500 m · last 12 months</div>
+          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
+          <div class="note">Part I (serious) ×${p1} · Part II ×${p2}</div></div></div>
+        ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No incidents recorded within 500 m in the last 12 months.</p>`}
+        ${data.partial ? `<div class="warnbox">One of the two Sheriff datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
+        <p class="section-sub" style="margin-top:8px">Locations are block-level; publication runs ~3–4 weeks behind. LASD Part I &amp; II crime layers, LA County open data.</p>`;
+    }
+  } else if (data && data.kind === "glendale") {
+    body = `<h3 class="section">Glendale PD</h3>
+      <p class="section-sub">Glendale publishes <strong>no incident-level open data</strong> this tool could query — use its official live log and map instead:</p>
+      <div class="links">
+        <div><a href="${GPD_LIVE}" target="_blank" rel="noopener">Live Calls-for-Service log ↗</a><div class="ldesc">Police activity of the last ~72 hours, refreshed about every 30 minutes</div></div>
+        <div><a href="${GPD_STATS}" target="_blank" rel="noopener">Crime statistics &amp; booking logs ↗</a><div class="ldesc">Monthly NIBRS stats PDFs (through the current year) and daily booking logs</div></div>
+        <div><a href="${GPD_MAP}" target="_blank" rel="noopener">Glendale crime map (CrimeMapping.com) ↗</a><div class="ldesc">The mapping vendor Glendale PD publishes incidents to</div></div>
+      </div>
+      <p class="section-sub" style="margin-top:10px">Response times from GPD’s own annual reports: emergency calls averaged <strong>5:13 call-to-scene</strong> (2:58 dispatch-to-scene) in 2023, and <strong>2:45 dispatch-to-scene</strong> in 2025.
+        <a href="https://issuu.com/glendalepd/docs/gpd_2023_annual_report_revised_05.2024_" target="_blank" rel="noopener">2023 report ↗</a> ·
+        <a href="https://issuu.com/glendalepd/docs/glendale_police_department_2025_annual_report" target="_blank" rel="noopener">2025 report ↗</a></p>`;
+  } else if (data && data.kind === "city") {
+    body = `<h3 class="section">${esc(titleCase(juris.name))} Police</h3>
+      <p class="section-sub">${esc(titleCase(juris.name))} runs its own police department, which doesn’t publish incident-level open data this tool can query. Many agencies publish to CrimeMapping.com — check there, and verify with the department directly.</p>`;
+  } else if (juris && !juris.none) {
+    body = `<p class="section-sub">Couldn’t load incident data for this jurisdiction — use the links below.</p>`;
+  }
+
+  // 3) city-context rates (only the two cities with verified figures)
+  let ratesHtml = "";
+  if (juris && !juris.none && CITY_RATES[juris.name]) {
+    const tile = (city, r) => `
+      <div class="tile"><div class="label">${esc(titleCase(city))} · violent</div><div class="value">${r.v} <small>/100k</small></div></div>
+      <div class="tile"><div class="label">${esc(titleCase(city))} · property</div><div class="value">${r.p.toLocaleString()} <small>/100k</small></div></div>`;
+    ratesHtml = `<div class="card">
+      <h3 class="section">City crime rates, 2024</h3>
+      <p class="section-sub">Reported crimes per 100,000 residents — CA DOJ counts ÷ Census July-2024 population. Shown for comparison; neighborhoods vary hugely within a city.</p>
+      <div class="tiles">${tile("GLENDALE", CITY_RATES.GLENDALE)}${tile("LOS ANGELES", CITY_RATES["LOS ANGELES"])}</div>
+    </div>`;
+  }
+
+  const links = [
+    ["FBI Crime Data Explorer ↗", "https://cde.ucr.cjis.gov/", "Official national crime statistics by agency and city"],
+    ["CA DOJ OpenJustice ↗", "https://openjustice.doj.ca.gov/data", "The state crime counts behind the rate figures above"],
+    ["CrimeMapping.com ↗", "https://www.crimemapping.com/", "Incident map covering many local agencies (incl. Glendale PD &amp; LASD)"],
+    ["LAPD NIBRS offenses 2026– ↗", "https://data.lacity.org/d/k7nn-b2ep", "The current LAPD dataset queried here"],
+    ["LAPD NIBRS offenses 2024–25 ↗", "https://data.lacity.org/d/y8y3-fqfu", "The companion dataset covering the rest of the 12-month window"],
+    ["LASD Part I &amp; II crimes ↗", "https://www.arcgis.com/home/item.html?id=5e055d13feba4a7b9ee25a905a11f244", "The Sheriff’s year-to-date crime layer"]
+  ];
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${d}</div></div>`).join("");
+
+  $("tab-safety").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      ${jHtml}
+      ${body ? `<div style="margin-top:14px">${body}</div>` : ""}
+    </div>
+    ${ratesHtml}
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+async function loadSafety() {
+  if (lazyTabs.safety.loaded || !lastGeo) return;
+  lazyTabs.safety.loaded = true;
+  const geo = lastGeo;
+  $("tab-safety").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking jurisdiction &amp; reported crime nearby…</span></div></div>`;
+  let juris = null;
+  try { juris = await jurisdictionLookup(geo.lon, geo.lat); } catch (e) {}
+  if (geo !== lastGeo) return; // a new search started — never render stale data
+  let data = null;
+  if (juris && !juris.none) {
+    if (juris.incorporated && juris.name === "LOS ANGELES") {
+      try { data = Object.assign({ kind: "lapd" }, await lapdLookup(geo.lon, geo.lat)); }
+      catch (e) { data = { kind: "lapd", failed: true }; }
+    } else if (!juris.incorporated) {
+      try { data = Object.assign({ kind: "lasd" }, await lasdLookup(geo.lon, geo.lat)); }
+      catch (e) { data = { kind: "lasd", failed: true }; }
+    } else if (juris.name === "GLENDALE") {
+      data = { kind: "glendale" };
+    } else {
+      data = { kind: "city" };
+    }
+  }
+  if (geo !== lastGeo) return;
+  renderSafety(geo, juris, data);
+}
+
+/* ================= getting around (Phase 3) ================= */
+function walkTier(v) {
+  if (v <= 5.75) return "Least walkable";
+  if (v <= 10.5) return "Below-average walkable";
+  if (v <= 15.25) return "Above-average walkable";
+  return "Most walkable";
+}
+function walkScoreUrl(label) {
+  // lowercase slug: walkscore.com 301s mixed case to the lowercase canonical
+  const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return "https://www.walkscore.com/score/" + slug;
+}
+// plain title-casing — no "La"→"LA" rewrite here, it would mangle Spanish
+// place names (La Crescenta, La Puente); the bikeways code special-cases the
+// one "LA River" street name itself
+function titleCase(s) {
+  return String(s).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
+}
+
+async function walkLookup(lon, lat) {
+  try {
+    const j = await getJSON(arcgisPointQuery(EPA_WALK, lon, lat, { outFields: "NatWalkInd,D4A,GEOID10,TotPop" }));
+    const f = (j.features || [])[0];
+    return f ? { ind: f.attributes.NatWalkInd, geoid: f.attributes.GEOID10, src: "epa" } : null;
+  } catch (e) {
+    // mirror hosts the OLDER 2010-vintage index (and spells the field D4a)
+    const j2 = await getJSON(arcgisPointQuery(EPA_WALK_MIRROR, lon, lat, { outFields: "NatWalkInd,D4a,GEOID10" }));
+    const f2 = (j2.features || [])[0];
+    return f2 ? { ind: f2.attributes.NatWalkInd, geoid: f2.attributes.GEOID10, src: "mirror" } : null;
+  }
+}
+
+async function stopsLookup(lon, lat) {
+  async function ring(d) {
+    const u = METRO_STOPS + "?" + new URLSearchParams({
+      geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+      distance: String(d), units: "esriSRUnit_Meter", spatialRel: "esriSpatialRelIntersects",
+      outFields: "stop_id,stop_name", returnGeometry: "true", outSR: "4326",
+      resultRecordCount: "100", f: "json"
+    });
+    const j = await getJSON(u);
+    const out = [];
+    for (const f of (j.features || [])) {
+      const a = f.attributes || {}, g = f.geometry || {};
+      if (!a.stop_name) continue;
+      out.push({ name: String(a.stop_name), dist: (g.x != null && g.y != null) ? haversineM(lat, lon, g.y, g.x) : null });
+    }
+    out.sort((x, y) => (x.dist == null ? 1e12 : x.dist) - (y.dist == null ? 1e12 : y.dist));
+    out.capped = j.exceededTransferLimit === true;
+    return out;
+  }
+  const near = await ring(800);
+  if (near.length) return { radius: 800, stops: near };
+  return { radius: 1600, stops: await ring(1600) };
+}
+
+const BIKE_CLASS = { 1: "Class I path (off-street)", 2: "Class II bike lane", 3: "Class III shared route", 4: "Class IV protected lane" };
+async function bikesLookup(lon, lat) {
+  const [cityR, countyR] = await Promise.allSettled([
+    queryZoneLayer(BIKE_LACITY, lon, lat, 500),
+    queryZoneLayer(BIKE_COUNTY, lon, lat, 500)
+  ]);
+  if (cityR.status === "fulfilled") {
+    const cur = cityR.value.filter(a => !String(a.Retire || "").trim()); // 'X' = superseded facility
+    if (cur.length) {
+      const byClass = {}, streets = [];
+      for (const a of cur) {
+        if (typeof a.Class === "number") byClass[a.Class] = (byClass[a.Class] || 0) + 1;
+        const st = a.ST_NAME && titleCase(String(a.ST_NAME).trim()).replace(/^La River/, "LA River");
+        if (st && !streets.includes(st)) streets.push(st);
+      }
+      return { src: "lacity", count: cur.length, byClass, streets };
+    }
+  }
+  if (countyR.status === "fulfilled") {
+    const feats = countyR.value.filter(a => typeof a.class === "number" && a.class >= 1);
+    const byClass = {};
+    for (const a of feats) byClass[a.class] = (byClass[a.class] || 0) + 1;
+    // the countywide layer covers all of LA County, so its empty result is a
+    // trustworthy "none" — the LA City layer's empty result is not (the point
+    // may simply be outside LA City), so never report "none" from it alone
+    return { src: "county", count: feats.length, byClass, streets: [] };
+  }
+  throw new Error("bikeways failed");
+}
+
+function renderMove(geo, walk, transit, bikes) {
+  // 1) walkability
+  let walkBody;
+  if (!walk) walkBody = `<p class="section-sub">Couldn’t load the EPA walkability service — try the map link below.</p>`;
+  else if (walk.none) walkBody = `<p class="section-sub">No walkability score for this location (EPA scores census block groups only).</p>`;
+  else walkBody = `
+    <div class="tiles">
+      <div class="tile"><div class="label">National Walkability Index</div>
+        <div class="value">${esc(walk.ind.toFixed(1))} <small>/ 20</small></div>
+        <div class="note">${esc(walkTier(walk.ind))} — density, street connectivity &amp; transit access combined</div></div>
+    </div>
+    <p class="section-sub" style="margin-top:8px">Census block group ${esc(walk.geoid || "")} · ${walk.src === "epa" ? "current EPA release" : "older 2010-vintage mirror (EPA’s main server didn’t respond)"}</p>`;
+
+  // 2) transit
+  let transitBody;
+  if (!transit) transitBody = `<p class="section-sub">Couldn’t load the Metro stops service — check Metro’s own map below.</p>`;
+  else {
+    const radiusTxt = transit.radius === 800 ? "800 m" : "1.6 km";
+    const seen = new Set(), nearest = [];
+    for (const s of transit.stops) {
+      if (seen.has(s.name)) continue;
+      seen.add(s.name);
+      nearest.push(s);
+      if (nearest.length === 3) break;
+    }
+    transitBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">Metro stops within ${radiusTxt}</div>
+          <div class="value">${transit.stops.length}${transit.stops.capped ? "+" : ""}</div>
+          <div class="note">${transit.radius === 1600
+            ? (transit.stops.length ? "None within 800 m — widened to 1.6 km" : "No LA Metro stop within 1.6 km")
+            : "LA Metro bus &amp; rail (Dec 2024 network)"}</div></div>
+      </div>
+      ${nearest.length ? `<div class="schoollist">${nearest.map(s => `<div class="schoolrow"><div class="srow-top"><span class="sname">${esc(s.name)}</span><span class="sdist">${s.dist != null ? esc(distTxt(s.dist)) : ""}</span></div></div>`).join("")}</div>` : ""}
+      <p class="section-sub" style="margin-top:8px">Only LA Metro is in this dataset — municipal buses (Glendale Beeline, LADOT DASH, Big Blue Bus) aren’t shown even where they run.</p>`;
+  }
+
+  // 3) bikeways
+  let bikeBody;
+  if (!bikes) bikeBody = `<p class="section-sub">Couldn’t load the bikeway inventories.</p>`;
+  else if (!bikes.count) bikeBody = `<p class="section-sub">No existing bikeway within 500 m in the ${bikes.src === "lacity" ? "LA City" : "countywide"} inventory.</p>`;
+  else {
+    const classes = Object.keys(bikes.byClass).sort().map(c => `${esc(BIKE_CLASS[c] || "Class " + c)} ×${bikes.byClass[c]}`).join(" · ");
+    bikeBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">Bikeway segments within 500 m</div>
+          <div class="value">${bikes.count}</div>
+          <div class="note">${bikes.src === "lacity" ? "LA City DOT inventory, current facilities only" : "Metro countywide inventory (existing facilities)"}</div></div>
+      </div>
+      <p class="section-sub" style="margin-top:8px">${classes}${bikes.streets.length ? `<br>On: ${esc(bikes.streets.slice(0, 6).join(", "))}${bikes.streets.length > 6 ? "…" : ""}` : ""}</p>`;
+  }
+
+  const links = [
+    ["Walk Score for this address ↗", walkScoreUrl(geo.label), "Independent Walk/Transit/Bike scores (0–100) for the exact address"],
+    ["EPA Walkability Index map ↗", EPA_WALK_VIEWER, "Verify the federal walkability score for this block group"],
+    ["EPA Smart Location Mapping ↗", "https://www.epa.gov/smartgrowth/smart-location-mapping#walkability", "Methodology behind the 1–20 index"],
+    ["Metro schedules &amp; maps ↗", "https://www.metro.net/riding/schedules/", "Official LA Metro routes serving these stops"]
+  ];
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  $("tab-move").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Walkability</h3>
+      ${walkBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Transit stops nearby</h3>
+      ${transitBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Bikeways</h3>
+      ${bikeBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+async function loadMove() {
+  if (lazyTabs.move.loaded || !lastGeo) return;
+  lazyTabs.move.loaded = true;
+  const geo = lastGeo;
+  $("tab-move").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking walkability, transit stops &amp; bikeways…</span></div></div>`;
+  const [wR, tR, bR] = await Promise.allSettled([
+    walkLookup(geo.lon, geo.lat),
+    stopsLookup(geo.lon, geo.lat),
+    bikesLookup(geo.lon, geo.lat)
+  ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
+  renderMove(geo,
+    wR.status === "fulfilled" ? (wR.value || { none: true }) : null,
+    tR.status === "fulfilled" ? tR.value : null,
+    bR.status === "fulfilled" ? bR.value : null);
+}
+
+async function loadAir() {
+  if (lazyTabs.air.loaded || !lastGeo) return;
+  lazyTabs.air.loaded = true;
+  const geo = lastGeo;
+  $("tab-air").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking freeways, pollution, air quality &amp; noise…</span></div></div>`;
+  const [hwR, aadtR, cesR, aqR, railR, apnR] = await Promise.allSettled([
+    highwayLookup(geo.lon, geo.lat),
+    aadtLookup(geo.lon, geo.lat),
+    cesLookup(geo.lon, geo.lat),
+    aqLookup(geo.lon, geo.lat),
+    railLookup(geo.lon, geo.lat),
+    airportNoiseLookup(geo.lon, geo.lat)
+  ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
+  renderAir(geo,
+    hwR.status === "fulfilled" ? hwR.value : null,
+    aadtR.status === "fulfilled" ? aadtR.value : null,
+    cesR.status === "fulfilled" ? (cesR.value || { none: true }) : null,
+    aqR.status === "fulfilled" ? aqR.value : null,
+    railR.status === "fulfilled" ? railR.value : null,
+    apnR.status === "fulfilled" ? apnR.value : undefined);
+}
+
+function resetTabs() {
+  for (const k in lazyTabs) {
+    lazyTabs[k].loaded = false;
+    const p = $("tab-" + k);
+    if (p) p.innerHTML = "";
+  }
+  document.querySelectorAll(".tab").forEach(x => {
+    const active = x.dataset.tab === "fire";
+    x.classList.toggle("active", active);
+    x.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = x.id !== "tab-fire"; });
 }
 
 /* ================= status UI ================= */
@@ -520,15 +1740,20 @@ function renderVerdict(geo, fhsz, nri, fires) {
     extra = `<div class="tile"><div class="label">Nearest hazard zone</div><div class="value" style="font-size:15px">${esc(fhsz.nearest.cls || "")}</div><div class="note">${dtxt} — close enough that some carriers' wildfire scores may notice</div></div>`;
   }
 
+  // nri === undefined → the FEMA service failed; null → no tract record here
   const nriRated = nri && nri.WFIR_RISKR && nri.WFIR_RISKS > 0 && !/no rating|not applicable|insufficient/i.test(nri.WFIR_RISKR);
-  const nriTile = !nri ? "" : nriRated
+  const nriTile = nri === undefined
+    ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The FEMA National Risk Index service didn’t respond</div></div>`
+    : !nri
+    ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">Not determined</div><div class="note">No FEMA tract record at this location</div></div>`
+    : nriRated
     ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">${esc(nri.WFIR_RISKR)}</div><div class="note">Risk score ${Math.round(nri.WFIR_RISKS)}/100 nationally (FEMA NRI)</div></div>`
     : `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">No rating</div><div class="note">FEMA hasn’t assigned a wildfire risk rating to this tract</div></div>`;
   const fireCount = fires ? fires.length : 0;
   const recent = fires && fires[0];
   const firesTile = fires
-    ? `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value">${fireCount}</div><div class="note">${recent ? "Most recent: " + esc(recent.name) + " (" + recent.year + ")" : "None recorded"}</div></div>`
-    : "";
+    ? `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value">${fireCount}${fires.capped ? "+" : ""}</div><div class="note">${recent ? "Most recent: " + esc(recent.name) + " (" + recent.year + ")" : "None recorded"}</div></div>`
+    : `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The fire-perimeter service didn’t respond</div></div>`;
 
   const outsideCA = geo.src !== "coords" && !/\bCA\b|California/i.test(geo.label || "");
 
@@ -544,6 +1769,7 @@ function renderVerdict(geo, fhsz, nri, fires) {
     </div>
     <p class="verdict-text">${v.text}</p>
     ${outsideCA ? '<div class="warnbox">This address doesn’t look like it’s in California — CAL FIRE hazard-zone data only covers CA, so the zone result may not be meaningful here.</div>' : ""}
+    ${fhsz.partial ? '<div class="warnbox">Some of the official hazard-zone layers didn’t respond, so this zone result may be <strong>incomplete</strong> — double-check with the CAL FIRE map link below before relying on it.</div>' : ""}
     <div class="tiles">${extra}${nriTile}${firesTile}</div>
     <h3 class="section" style="margin-top:16px">Verify this address on the official sources</h3>
     <div class="links">
@@ -609,15 +1835,17 @@ function renderMapLinks() {
 }
 
 /* ================= main flow ================= */
-let busy = false;
+let busy = false, statusTimer = null;
 async function run() {
   const q = $("addr").value.trim();
   if (!q || busy) return;
   busy = true;
+  clearTimeout(statusTimer); // a leftover hide-timer from the previous search must not hide this one's progress
   $("go").disabled = true;
   $("err").style.display = "none";
   $("result").style.display = "none";
   $("status").style.display = "block";
+  resetTabs();
   const states = ["run", "", "", ""];
   renderSteps(states);
 
@@ -629,8 +1857,12 @@ async function run() {
       if (e.message === "blocked") {
         throw new Error("Your browser or network is blocking the data requests entirely (neither geocoding service could even be reached). This is usually an ad-blocker or privacy extension (uBlock, NoScript, Privacy Badger), an antivirus web shield, a VPN, or DNS filtering (Pi-hole/NextDNS). Try a private window with extensions off, another browser, or your phone on cellular data — then whitelist this site in whichever tool was the culprit.");
       }
+      if (e.message === "geo-down") {
+        throw new Error("Both geocoding services returned errors — they may be down or rate-limiting right now. Your address wasn’t the problem; wait a minute and try again.");
+      }
       throw new Error("Couldn’t find that address. Try adding the ZIP code (e.g. “…, Glendale, CA 91206”), or paste coordinates as “lat, lon”.");
     }
+    lastGeo = geo;
     states[0] = "ok"; states[1] = "run"; states[2] = "run"; states[3] = "run";
     renderSteps(states);
 
@@ -649,10 +1881,10 @@ async function run() {
     }
 
     renderVerdict(geo, fhszR.value,
-      nriR.status === "fulfilled" ? nriR.value : null,
-      firesR.status === "fulfilled" ? firesR.value : null);
+      nriR.status === "fulfilled" ? nriR.value : undefined,
+      firesR.status === "fulfilled" ? firesR.value : undefined);
     $("result").style.display = "block";
-    setTimeout(() => { $("status").style.display = "none"; }, 600);
+    statusTimer = setTimeout(() => { $("status").style.display = "none"; }, 600);
   } catch (e) {
     $("status").style.display = "none";
     $("err").textContent = e.message || "Something went wrong — please try again.";
@@ -667,6 +1899,15 @@ $("go").addEventListener("click", run);
 $("addr").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
 document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => {
   $("addr").value = ch.dataset.a; run();
+}));
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => { x.classList.remove("active"); x.setAttribute("aria-selected", "false"); });
+  document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = true; });
+  t.classList.add("active");
+  t.setAttribute("aria-selected", "true");
+  const panel = $("tab-" + t.dataset.tab);
+  if (panel) panel.hidden = false;
+  if (lazyTabs[t.dataset.tab]) lazyTabs[t.dataset.tab].load();
 }));
 renderCarriers();
 renderMapLinks();

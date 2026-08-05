@@ -259,7 +259,7 @@
     <div class="tabs" id="tabs" role="tablist">
       <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
       <button class="tab" data-tab="schools" role="tab">Schools</button>
-      <button class="tab" data-tab="air" role="tab">Air &amp; Traffic</button>
+      <button class="tab" data-tab="air" role="tab">Air &amp; Noise</button>
       <button class="tab" data-tab="move" role="tab">Getting Around</button>
       <button class="tab" data-tab="safety" role="tab">Safety</button>
       <button class="tab" data-tab="people" role="tab">People</button>
@@ -288,7 +288,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Traffic tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -426,6 +426,28 @@ const CITY_RATES = {
   "GLENDALE":    { v: 282, p: 1988 },
   "LOS ANGELES": { v: 750, p: 2637 }
 };
+// ---- People (Phase 5) + Noise (Phase 6), live-verified Aug 2026 ----
+// Esri Living Atlas "(Latest)" ACS views (owner esri_demographics), keyless,
+// CORS *; layer 2 = census tract. Vintage was ACS 2020-2024 5-year at last
+// verification — the views update in place each December, keeping URLs and
+// field names stable. Estimates can be null (suppressed); tract median
+// income is top-coded at 250001 and home value at 2000001.
+const ACS_BASE = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/";
+const ACS_INCOME = ACS_BASE + "ACS_Median_Household_Income_View_Boundaries/FeatureServer/2/query";
+const ACS_EDU = ACS_BASE + "ACS_Educational_Attainment_View_Boundaries/FeatureServer/2/query";
+const ACS_HOUSING = ACS_BASE + "ACS_Housing_Units_Occupancy_View_Boundaries/FeatureServer/2/query";
+// Noise: the BTS/Esri Transportation Noise raster is TilesOnly (no identify;
+// a point read needs a client-side LERC2 decoder — a dependency this app
+// deliberately doesn't take). Instead: verified proximity fallbacks — the
+// NTAD rail-network layer (CORS *; RROWNER1 SCAX = Metrolink, PASSNGR B =
+// "Amtrak & Commuter", NET M = main line) and LA County's airport
+// noise-contour layer (CNEL dB CLASS; LA County airports only) — plus a
+// link-out to the official viewer (maps.dot.gov; note www.bts.gov 403s
+// datacenter IPs, don't link or health-check it).
+const RAIL_LINES = "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines/FeatureServer/0/query";
+const AIRPORT_NOISE = "https://arcgis.gis.lacounty.gov/arcgis/rest/services/DRP/Open_Data/MapServer/47/query";
+const NOISE_VIEWER = "https://maps.dot.gov/BTS/NationalTransportationNoiseMap/";
+
 // Glendale PD publishes no incident-level open data; these official pages
 // were content-verified via a browser-grade fetch (glendaleca.gov's Akamai
 // edge 403s ALL curl traffic by TLS fingerprint — do not health-check these
@@ -1016,6 +1038,34 @@ async function aqLookup(lon, lat) {
   return j && j.current ? j.current : null;
 }
 
+/* ---- noise (Phase 6): proximity to rail + airport contours ---- */
+async function railLookup(lon, lat) {
+  const j = await getJSON(RAIL_LINES + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", distance: "1000", units: "esriSRUnit_Meter",
+    outFields: "RROWNER1,TRKRGHTS1,SUBDIV,PASSNGR,NET,MILES",
+    returnGeometry: "false", f: "json"
+  }));
+  const feats = (j.features || []).map(f => f.attributes || {});
+  // NET "M" = main line (the noise that matters); S/O = sidings & spurs
+  const mains = feats.filter(a => a.NET === "M");
+  const pick = mains[0] || feats[0] || null;
+  if (!pick) return { any: false };
+  const owner = { SCAX: "Metrolink", BNSF: "BNSF", UP: "Union Pacific", ATK: "Amtrak", AMTK: "Amtrak" }[pick.RROWNER1] || pick.RROWNER1 || "";
+  return {
+    any: true, main: !!mains.length,
+    owner: String(owner),
+    subdiv: pick.SUBDIV ? titleCase(String(pick.SUBDIV).replace(/\s*\(.*\)\s*$/, "")) : null,
+    passenger: pick.PASSNGR === "B",           // "B" = Amtrak & commuter service
+    amtrak: pick.TRKRGHTS1 === "AMTK"
+  };
+}
+async function airportNoiseLookup(lon, lat) {
+  const atts = await queryZoneLayer(AIRPORT_NOISE, lon, lat);
+  const a = atts[0];
+  return a ? { airport: a.AIRPORT_NAME ? String(a.AIRPORT_NAME) : "?", cnel: a.CLASS ? String(a.CLASS) : "?", src: a.SOURCE ? String(a.SOURCE) : null } : null;
+}
+
 function aqiCat(v) {
   if (v <= 50)  return { st: "good",     label: "Good" };
   if (v <= 100) return { st: "warning",  label: "Moderate" };
@@ -1025,7 +1075,7 @@ function aqiCat(v) {
   return { st: "critical", label: "Hazardous" };
 }
 
-function renderAir(geo, hw, aadt, ces, aq) {
+function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
   const distLabel = { 200: "within ~200 m", 500: "within ~500 m", 1000: "within ~1 km" };
 
   let hwTile;
@@ -1074,7 +1124,24 @@ function renderAir(geo, hw, aadt, ces, aq) {
       <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
   }
 
+  // noise card (Phase 6): proximity signals + the official modeled-dB viewer
+  let noiseBody;
+  {
+    const parts = [];
+    if (rail === null) parts.push(`<p class="section-sub">Couldn’t load the federal rail-network layer.</p>`);
+    else if (rail && rail.any) {
+      const who = [rail.owner, rail.amtrak ? "with Amtrak trackage rights" : null].filter(Boolean).join(" ");
+      parts.push(`<div class="warnbox">${rail.main ? "An active rail <strong>main line</strong>" : "A rail siding or spur"} runs within 1 km${who ? " — " + esc(who) : ""}${rail.subdiv ? " (" + esc(rail.subdiv) + " subdivision)" : ""}${rail.passenger ? ", carrying Amtrak &amp; commuter service" : ""}. ${rail.main ? "Expect regular train and horn noise — visit at different times of day." : ""}</div>`);
+    } else if (rail) parts.push(`<p class="section-sub">No rail line within 1 km (federal rail network).</p>`);
+    if (apn === undefined) parts.push(`<p class="section-sub">Couldn’t load the LA County airport-noise layer.</p>`);
+    else if (apn) parts.push(`<div class="warnbox">Inside the <strong>${esc(apn.airport)}</strong> airport ${esc(apn.cnel)} dB CNEL noise contour${apn.src ? " (" + esc(apn.src) + ")" : ""}.</div>`);
+    else parts.push(`<p class="section-sub">Not inside any LA County airport noise contour.</p>`);
+    if (hw && hw.routes.length && hw.dist <= 500) parts.push(`<p class="section-sub">The ${esc(hw.routes.join("/"))} freeway noted above is also a noise source at this range.</p>`);
+    noiseBody = parts.join("");
+  }
+
   const links = [
+    ["National Transportation Noise Map ↗", NOISE_VIEWER, "Official USDOT viewer — search the address to see modeled road/rail/aviation noise in dB"],
     ["AirNow Fire &amp; Smoke map at this location ↗", `https://fire.airnow.gov/?lat=${geo.lat}&lng=${geo.lon}&zoom=11`, "EPA’s official live air-quality map, centered on this address"],
     ["CalEnviroScreen 4.0 map ↗", CES_MAP, "OEHHA’s official map — search the address to verify the tract percentiles"],
     ["Caltrans Traffic Census ↗", "https://dot.ca.gov/programs/traffic-operations/census", "The AADT program behind the traffic-volume figure"],
@@ -1099,6 +1166,90 @@ function renderAir(geo, hw, aadt, ces, aq) {
       ${aqBody}
     </div>
     <div class="card">
+      <h3 class="section">Noise sources</h3>
+      ${noiseBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+/* ================= people (Phase 5) ================= */
+async function acsLookup(lon, lat) {
+  const q = (base, outFields) => getJSON(arcgisPointQuery(base, lon, lat, { outFields }))
+    .then(j => { const f = (j.features || [])[0]; return f ? f.attributes : null; });
+  const [inc, edu, hou] = await Promise.allSettled([
+    q(ACS_INCOME, "GEOID,NAME,B19049_001E,B19049_001M"),
+    q(ACS_EDU, "GEOID,NAME,B15002_001E,B15002_calc_numGEBAE,B15002_calc_pctGEBAE"),
+    q(ACS_HOUSING, "GEOID,NAME,B25003_001E,B25003_002E,B25003_calc_pctOwnE,B25077_001E")
+  ]);
+  if ([inc, edu, hou].every(s => s.status === "rejected")) throw new Error("acs failed");
+  const v = s => s.status === "fulfilled" ? s.value : undefined; // undefined = that service failed
+  return { inc: v(inc), edu: v(edu), hou: v(hou) };
+}
+// tract estimates are top-coded: 250001 = ">$250k" income, 2000001 = ">$2M" home value
+function dollars(v, topCode, topLabel) {
+  if (v == null) return null;
+  if (topCode && v >= topCode) return topLabel;
+  return "$" + Math.round(v).toLocaleString();
+}
+
+function renderPeople(geo, acs) {
+  let body, geoid = null, tractName = null;
+  if (!acs) body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
+  else {
+    const any = acs.inc || acs.edu || acs.hou;
+    if (acs.inc === null && acs.edu === null && acs.hou === null) {
+      body = `<p class="section-sub">No census tract found at this location.</p>`;
+    } else if (!any) {
+      body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
+    } else {
+      geoid = (any.GEOID != null) ? String(any.GEOID) : null;
+      tractName = (any.NAME != null) ? String(any.NAME) : null;
+      const tile = (label, value, note) => `<div class="tile"><div class="label">${label}</div>
+        <div class="value" style="font-size:19px">${value}</div>${note ? `<div class="note">${note}</div>` : ""}</div>`;
+      const failTile = label => tile(label, "Couldn’t load", "This census service didn’t respond");
+      const noneTile = label => tile(label, "No estimate", "Suppressed or unavailable for this tract");
+
+      const incTile = acs.inc === undefined ? failTile("Median household income")
+        : (acs.inc && acs.inc.B19049_001E != null)
+          ? tile("Median household income", esc(dollars(acs.inc.B19049_001E, 250001, "&gt;$250k")),
+              acs.inc.B19049_001M != null ? "± $" + Math.round(acs.inc.B19049_001M).toLocaleString() + " margin of error" : "")
+          : noneTile("Median household income");
+      const eduTile = acs.edu === undefined ? failTile("Bachelor’s degree or higher")
+        : (acs.edu && acs.edu.B15002_calc_pctGEBAE != null)
+          ? tile("Bachelor’s degree or higher", esc(acs.edu.B15002_calc_pctGEBAE + "%"), "of residents 25 and older")
+          : noneTile("Bachelor’s degree or higher");
+      const ownTile = acs.hou === undefined ? failTile("Owner-occupied homes")
+        : (acs.hou && acs.hou.B25003_calc_pctOwnE != null)
+          ? tile("Owner-occupied homes", esc(acs.hou.B25003_calc_pctOwnE + "%"), "of occupied housing units")
+          : noneTile("Owner-occupied homes");
+      const valTile = acs.hou === undefined ? failTile("Median home value")
+        : (acs.hou && acs.hou.B25077_001E != null)
+          ? tile("Median home value", esc(dollars(acs.hou.B25077_001E, 2000001, "&gt;$2M")), "owner-occupied units, self-reported")
+          : noneTile("Median home value");
+      body = `<div class="tiles">${incTile}${eduTile}${ownTile}${valTile}</div>
+        <p class="section-sub" style="margin-top:8px">${tractName ? esc(tractName) + " · " : ""}Census ACS 5-year estimates (latest release — 2020-2024 at last verification). Tract-level estimates carry real margins of error; treat them as a picture of the immediate neighborhood, not the block.</p>`;
+    }
+  }
+
+  const links = [];
+  if (geoid) links.push(["Full tract profile on Census Reporter ↗", "https://censusreporter.org/profiles/14000US" + geoid + "/",
+    "Independent, readable breakdown of every ACS statistic for this exact tract"]);
+  links.push(["Internet options at this address (FCC Broadband Map) ↗",
+    `https://broadbandmap.fcc.gov/location-summary/fixed?lon=${geo.lon}&lat=${geo.lat}&zoom=15`,
+    "Official FCC map of wired &amp; wireless providers serving this location"]);
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${d}</div></div>`).join("");
+
+  $("tab-people").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Who lives here (census tract)</h3>
+      ${body}
+    </div>
+    <div class="card">
       <h3 class="section">Check the sources yourself</h3>
       <div class="links">${linksHtml}</div>
     </div>`;
@@ -1107,8 +1258,11 @@ function renderAir(geo, hw, aadt, ces, aq) {
 async function loadPeople() {
   if (lazyTabs.people.loaded || !lastGeo) return;
   lazyTabs.people.loaded = true;
-  // Phase 5 (ACS tract demographics + CensusReporter links) lands here
-  $("tab-people").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
+  const geo = lastGeo;
+  $("tab-people").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up census-tract demographics…</span></div></div>`;
+  let acs = null;
+  try { acs = await acsLookup(geo.lon, geo.lat); } catch (e) {}
+  renderPeople(geo, acs);
 }
 
 /* ================= safety (Phase 4) ================= */
@@ -1498,18 +1652,22 @@ async function loadAir() {
   if (lazyTabs.air.loaded || !lastGeo) return;
   lazyTabs.air.loaded = true;
   const geo = lastGeo;
-  $("tab-air").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking freeways, pollution burden &amp; current air quality…</span></div></div>`;
-  const [hwR, aadtR, cesR, aqR] = await Promise.allSettled([
+  $("tab-air").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking freeways, pollution, air quality &amp; noise…</span></div></div>`;
+  const [hwR, aadtR, cesR, aqR, railR, apnR] = await Promise.allSettled([
     highwayLookup(geo.lon, geo.lat),
     aadtLookup(geo.lon, geo.lat),
     cesLookup(geo.lon, geo.lat),
-    aqLookup(geo.lon, geo.lat)
+    aqLookup(geo.lon, geo.lat),
+    railLookup(geo.lon, geo.lat),
+    airportNoiseLookup(geo.lon, geo.lat)
   ]);
   renderAir(geo,
     hwR.status === "fulfilled" ? hwR.value : null,
     aadtR.status === "fulfilled" ? aadtR.value : null,
     cesR.status === "fulfilled" ? (cesR.value || { none: true }) : null,
-    aqR.status === "fulfilled" ? aqR.value : null);
+    aqR.status === "fulfilled" ? aqR.value : null,
+    railR.status === "fulfilled" ? railR.value : null,
+    apnR.status === "fulfilled" ? apnR.value : undefined);
 }
 
 function resetTabs() {

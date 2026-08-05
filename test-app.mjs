@@ -322,6 +322,16 @@ async function moveRoutes(page, opts = {}) {
   await page.route("**/RmCCgQtiZLDCtblq/**", r => json(r, opts.countyBikes || { features: [] }));
 }
 
+// Noise (Phase 6) stubs — verbatim NTAD rail features near Tyburn (main line =
+// Metrolink Valley Sub with Amtrak trackage rights) + the verbatim Burbank
+// airport contour feature (used to exercise the in-contour code path)
+const RAIL_P1 = { features: [
+  { attributes: { OBJECTID: 35674, RROWNER1: "SCAX", TRKRGHTS1: null, SUBDIV: null, PASSNGR: null, NET: "S", MILES: 1.458236407979817 } },
+  { attributes: { OBJECTID: 36600, RROWNER1: "SCAX", TRKRGHTS1: null, SUBDIV: null, PASSNGR: null, NET: "O", MILES: 0.3590222248143609 } },
+  { attributes: { OBJECTID: 269168, RROWNER1: "SCAX", TRKRGHTS1: "AMTK", SUBDIV: "VALLEY (SCAX)", PASSNGR: "B", NET: "M", MILES: 0.39706182230547454 } },
+  { attributes: { OBJECTID: 269994, RROWNER1: "SCAX", TRKRGHTS1: "AMTK", SUBDIV: "VALLEY (SCAX)", PASSNGR: "B", NET: "M", MILES: 0.5637763283212474 } }
+]};
+const AIRPORT_BUR = { features: [{ attributes: { OBJECTID: 5291, CLASS: "65", AIRPORT_NAME: "Burbank", DATE_RECEIVED: "2/4/2025", SOURCE: "Quarterly Noise Monitoring at Bob Hope Airport - 4th Quarter - 2024" } }] };
 async function airRoutes(page, opts = {}) {
   await page.route("**/caltrans-gis.dot.ca.gov/**", r => {
     const u = r.request().url();
@@ -335,6 +345,24 @@ async function airRoutes(page, opts = {}) {
   });
   await page.route("**/CES4/FeatureServer/**", r => json(r, opts.ces || CES_P1));
   await page.route("**/air-quality-api.open-meteo.com/**", r => json(r, OPENMETEO_OK));
+  await page.route("**/xOi1kZaI0eWDREZv/**", r => json(r, opts.rail !== undefined ? opts.rail : RAIL_P1));
+  await page.route("**/arcgis.gis.lacounty.gov/**", r => json(r, opts.airport !== undefined ? opts.airport : { features: [] }));
+}
+// ===== Phase 5: People stubs (verbatim, live-captured Aug 2026) =====
+const ACS_INC_P1 = { features: [{ attributes: { GEOID: "06037187101", NAME: "Census Tract 1871.01", B19049_001E: 91829, B19049_001M: 24115 } }] };
+const ACS_EDU_P1 = { features: [{ attributes: { GEOID: "06037187101", NAME: "Census Tract 1871.01", B15002_001E: 2502, B15002_calc_numGEBAE: 1144, B15002_calc_pctGEBAE: 45.7 } }] };
+const ACS_HOU_P1 = { features: [{ attributes: { GEOID: "06037187101", NAME: "Census Tract 1871.01", B25003_001E: 1262, B25003_002E: 504, B25003_calc_pctOwnE: 39.9, B25077_001E: 1217100 } }] };
+const ACS_INC_P2 = { features: [{ attributes: { GEOID: "06037301300", NAME: "Census Tract 3013", B19049_001E: 201357, B19049_001M: 41308 } }] };
+const ACS_EDU_P2 = { features: [{ attributes: { GEOID: "06037301300", NAME: "Census Tract 3013", B15002_001E: 1390, B15002_calc_numGEBAE: 1036, B15002_calc_pctGEBAE: 74.5 } }] };
+const ACS_HOU_P2 = { features: [{ attributes: { GEOID: "06037301300", NAME: "Census Tract 3013", B25003_001E: 642, B25003_002E: 630, B25003_calc_pctOwnE: 98.1, B25077_001E: 1709200 } }] };
+async function peopleRoutes(page, opts = {}) {
+  await page.route("**/P3ePLMYs2RVChkJx/**", r => {
+    const u = r.request().url();
+    if (u.includes("Median_Household_Income")) return (opts.incomeDown || opts.allDown) ? r.abort("failed") : json(r, opts.income || ACS_INC_P1);
+    if (u.includes("Educational_Attainment")) return opts.allDown ? r.abort("failed") : json(r, opts.edu || ACS_EDU_P1);
+    if (u.includes("Housing_Units_Occupancy")) return opts.allDown ? r.abort("failed") : json(r, opts.housing || ACS_HOU_P1);
+    return json(r, { features: [] });
+  });
 }
 
 async function schoolsBaseRoutes(page) {
@@ -567,7 +595,9 @@ async function schoolsBaseRoutes(page) {
   await page.waitForSelector("#tab-air .tile", { timeout: 10000 });
   await page.waitForTimeout(200);
   const air = await page.textContent("#tab-air");
-  check("AIR: I-5 named exactly once (NB/SB deduped)", (air.match(/I-5/g) || []).length === 1, air.slice(0, 200));
+  const hwTileTxt = await page.textContent('#tab-air .tile:has-text("Nearest state highway")');
+  check("AIR: I-5 named exactly once in freeway tile (NB/SB deduped)", (hwTileTxt.match(/I-5/g) || []).length === 1, hwTileTxt);
+  check("AIR: noise card cross-references the freeway", air.includes("also a noise source"));
   check("AIR: freeway distance ring shown (~500 m)", air.includes("within ~500 m"));
   check("AIR: CARB 500-ft advisory with handbook link", air.includes("500 ft") && (await page.locator('#tab-air a[href*="Land%20Use%20Handbook_0.pdf"]').count()) === 2, "warnbox + sources card");
   check("AIR: AADT 219,000 veh/day (string parsed, max of back/ahead)", air.includes("219,000") && air.includes("veh/day"));
@@ -582,6 +612,9 @@ async function schoolsBaseRoutes(page) {
   check("AIR: AirNow link centered on this address", (await page.locator('#tab-air a[href*="fire.airnow.gov"][href*="lat=34.11268"]').count()) === 1);
   check("AIR: CES official map verify link", (await page.locator('#tab-air a[href*="experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"]').count()) === 1);
   check("AIR: Caltrans Traffic Census verify link", (await page.locator('#tab-air a[href*="dot.ca.gov/programs/traffic-operations/census"]').count()) === 1);
+  check("AIR: rail main line warnbox (Metrolink Valley + Amtrak)", air.includes("main line") && air.includes("Metrolink") && air.includes("Valley"), air.slice(-700));
+  check("AIR: no airport contour honestly stated", air.includes("Not inside any LA County airport noise contour"));
+  check("AIR: national noise map viewer link", (await page.locator('#tab-air a[href="https://maps.dot.gov/BTS/NationalTransportationNoiseMap/"]').count()) === 1);
   check("AIR: no JS errors (happy path)", errors.length === 0, errors.join(" | "));
   await page.screenshot({ path: path.join(here, "shot-air.png"), fullPage: true });
   await ctx.close();
@@ -600,7 +633,7 @@ async function schoolsBaseRoutes(page) {
   await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
   await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
   await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
-  await airRoutes(page, { noHighway: true, ces: CES_P2 });
+  await airRoutes(page, { noHighway: true, ces: CES_P2, rail: { features: [] }, airport: AIRPORT_BUR });
   await page.goto(appUrl);
   await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
   await page.click("#go");
@@ -613,6 +646,8 @@ async function schoolsBaseRoutes(page) {
   check("AIR-P2: no CARB warnbox when nothing near", !air.includes("500 ft"));
   check("AIR-P2: CES traffic 8th percentile (quiet street)", air.includes("8th"));
   check("AIR-P2: CES tract is the Glendale one", air.includes("6037301300") && air.includes("Glendale"));
+  check("AIR-P2: no rail within 1 km honest", air.includes("No rail line within 1 km"));
+  check("AIR-P2: airport contour path renders (Burbank 65 dB CNEL)", air.includes("Burbank") && air.includes("65") && air.includes("CNEL"));
   check("AIR-P2: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
@@ -628,6 +663,8 @@ async function schoolsBaseRoutes(page) {
   await page.route("**/caltrans-gis.dot.ca.gov/**", r => r.abort("failed"));
   await page.route("**/CES4/FeatureServer/**", r => r.abort("failed"));
   await page.route("**/air-quality-api.open-meteo.com/**", r => r.abort("failed"));
+  await page.route("**/xOi1kZaI0eWDREZv/**", r => r.abort("failed"));
+  await page.route("**/arcgis.gis.lacounty.gov/**", r => r.abort("failed"));
   await page.goto(appUrl);
   await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
   await page.click("#go");
@@ -639,7 +676,8 @@ async function schoolsBaseRoutes(page) {
   check("AIR-ERR: highway + AADT tiles say Couldn’t load", (air.match(/Couldn’t load/g) || []).length >= 3, air.slice(0, 400));
   check("AIR-ERR: CES failure points at official map", air.includes("Couldn’t load CalEnviroScreen"));
   check("AIR-ERR: AQ failure points at AirNow", air.includes("check AirNow"));
-  check("AIR-ERR: all four source links still shown", (await page.locator("#tab-air .links a").count()) === 4);
+  check("AIR-ERR: rail + airport noise failures labeled", air.includes("Couldn’t load the federal rail-network layer") && air.includes("Couldn’t load the LA County airport-noise layer"));
+  check("AIR-ERR: all five source links still shown", (await page.locator("#tab-air .links a").count()) === 5);
   check("AIR-ERR: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
@@ -883,6 +921,110 @@ async function schoolsBaseRoutes(page) {
   check("SAFE-ERR: jurisdiction still shown, LAPD failure honest", sf.includes("Los Angeles") && sf.includes("Couldn’t load the LAPD open-data service"), sf.slice(0, 300));
   check("SAFE-ERR: all six source links intact", (await page.locator("#tab-safety .links a").count()) >= 6);
   check("SAFE-ERR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// ===================== Phase 5: People tab (stubbed) =====================
+// -- happy path @ Tyburn --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await peopleRoutes(page);
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("PPL: tab present + lazy", (await page.locator('.tab[data-tab="people"]').count()) === 1 && (await page.textContent("#tab-people")).trim() === "");
+  await page.click('.tab[data-tab="people"]');
+  await page.waitForSelector("#tab-people .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const pp = await page.textContent("#tab-people");
+  check("PPL: median income $91,829 with MOE", pp.includes("$91,829") && pp.includes("$24,115"), pp.slice(0, 300));
+  check("PPL: bachelor's 45.7% of 25+", pp.includes("45.7%") && pp.includes("25 and older"));
+  check("PPL: owner-occupied 39.9%", pp.includes("39.9%"));
+  check("PPL: median home value $1,217,100", pp.includes("$1,217,100"));
+  check("PPL: tract name + vintage disclosed", pp.includes("Census Tract 1871.01") && pp.includes("2020-2024"));
+  check("PPL: CensusReporter tract link", (await page.locator('#tab-people a[href="https://censusreporter.org/profiles/14000US06037187101/"]').count()) === 1);
+  check("PPL: FCC broadband link with coordinates", (await page.locator('#tab-people a[href*="broadbandmap.fcc.gov/location-summary/fixed"][href*="lat=34.11268"]').count()) === 1);
+  check("PPL: no JS errors (happy path)", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-people.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- Glendale tract @ Matilija --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("1007 Matilija Rd, Glendale, California, 91208", -118.27626, 34.177624)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  await peopleRoutes(page, { income: ACS_INC_P2, edu: ACS_EDU_P2, housing: ACS_HOU_P2 });
+  await page.goto(appUrl);
+  await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="people"]');
+  await page.waitForSelector("#tab-people .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const pp = await page.textContent("#tab-people");
+  check("PPL-P2: income $201,357 / owner 98.1% / value $1,709,200", pp.includes("$201,357") && pp.includes("98.1%") && pp.includes("$1,709,200"), pp.slice(0, 300));
+  check("PPL-P2: CensusReporter link for the Glendale tract", (await page.locator('#tab-people a[href="https://censusreporter.org/profiles/14000US06037301300/"]').count()) === 1);
+  check("PPL-P2: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- one service down → per-tile honesty; the rest still render --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await peopleRoutes(page, { incomeDown: true });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="people"]');
+  await page.waitForSelector("#tab-people .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const pp = await page.textContent("#tab-people");
+  check("PPL-PART: income failure labeled, education intact", pp.includes("Couldn’t load") && pp.includes("45.7%"), pp.slice(0, 300));
+  check("PPL-PART: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- all census services down --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await peopleRoutes(page, { allDown: true, incomeDown: true });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="people"]');
+  await page.waitForSelector("#tab-people .card", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const pp = await page.textContent("#tab-people");
+  check("PPL-ERR: total failure labeled honestly", pp.includes("Couldn’t load the census services"), pp.slice(0, 300));
+  check("PPL-ERR: FCC link still offered (no tract link without GEOID)", (await page.locator('#tab-people a[href*="broadbandmap.fcc.gov"]').count()) === 1 && (await page.locator('#tab-people a[href*="censusreporter.org"]').count()) === 0);
+  check("PPL-ERR: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

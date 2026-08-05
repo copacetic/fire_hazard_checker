@@ -170,6 +170,101 @@ for (const [scenario, addr, colorScheme] of [
   await ctx.close();
 }
 
+// ===================== Phase 1: Schools tab (stubbed) =====================
+// Verbatim-shaped NCES EDGE responses. School_Districts_Current is a composite
+// (elementary/secondary/unified layers) queried point-in-polygon; a unified
+// district returns one name. Public_School_Locations_Current is a point layer
+// queried by radius (returnGeometry=true → distance computed client-side).
+const NCES_DIST_LAUSD = { features: [{ attributes: { NAME: "Los Angeles Unified School District", GEOID: "0622710" } }] };
+const NCES_SCHOOLS_OK = { features: [
+  { attributes: { NAME: "Atwater Avenue Elementary", LEVEL: "Elementary", LCITY: "Los Angeles", ST_SCHID: "CA-1964733-6023459" }, geometry: { x: -118.2625, y: 34.1125 } },
+  { attributes: { NAME: "Irving Middle School", LEVEL: "Middle", LCITY: "Los Angeles", ST_SCHID: "CA-1964733-6023460" }, geometry: { x: -118.272, y: 34.117 } },
+  { attributes: { NAME: "John Marshall High School", LEVEL: "High", LCITY: "Los Angeles" }, geometry: { x: -118.28, y: 34.108 } }
+]};
+const NCES_SCHOOLS_EMPTY = { features: [] };
+
+async function schoolsBaseRoutes(page) {
+  // enough fire-side routes to render #result so the tab bar appears
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("2968 Tyburn St, Los Angeles, California, 90039", -118.26164, 34.11268)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, r.request().url().includes("distance=") ? FHSZ_EMPTY : LRA25_HIGH));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_NORATING));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+}
+
+// -- happy path: LAUSD district + nearby schools --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await page.route("**/School_Districts_Current/FeatureServer/**", r => json(r, NCES_DIST_LAUSD));
+  await page.route("**/Public_School_Locations_Current/FeatureServer/**", r => json(r, NCES_SCHOOLS_OK));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+
+  // tab defaults: Fire visible, Schools hidden and empty until opened
+  check("SCH: Schools tab present", await page.locator('.tab[data-tab="schools"]').count() === 1);
+  check("SCH: Fire tab active by default", await page.locator('.tab[data-tab="fire"]').evaluate(el => el.classList.contains("active")));
+  check("SCH: schools panel hidden until opened", await page.locator("#tab-schools").isHidden());
+  check("SCH: schools lazy (no content before click)", (await page.textContent("#tab-schools")).trim() === "");
+
+  await page.click('.tab[data-tab="schools"]');
+  await page.waitForSelector("#tab-schools .schoolrow", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const sch = await page.textContent("#tab-schools");
+
+  check("SCH: fire panel now hidden", await page.locator("#tab-fire").isHidden());
+  check("SCH: district name shown (LA Unified)", sch.includes("Los Angeles Unified"));
+  check("SCH: nearby schools listed", sch.includes("Atwater Avenue Elementary") && sch.includes("John Marshall High"));
+  const firstRow = await page.textContent("#tab-schools .schoolrow:first-child");
+  check("SCH: nearest school sorted first (Atwater)", firstRow.includes("Atwater"), firstRow);
+  check("SCH: three schools rendered", await page.locator("#tab-schools .schoolrow").count() === 3);
+  check("SCH: distance rendered", /\d+\s?m|\d\.\d\s?km/.test(sch), sch.slice(0, 120));
+  check("SCH: LAUSD Resident School Identifier link", (await page.locator('#tab-schools a[href="https://rsi.lausd.net/"]').count()) === 1);
+  check("SCH: GreatSchools verify link present", (await page.locator('#tab-schools a[href*="greatschools.org"]').count()) >= 1);
+  check("SCH: CA Dashboard link uses 14-digit CDS", (await page.locator('#tab-schools a[href*="caschooldashboard.org/reports/19647336023459"]').count()) === 1);
+  check("SCH: NCES district finder link present", (await page.locator('#tab-schools a[href*="nces.ed.gov"]').count()) === 1);
+
+  // switching back to Fire still works and content intact
+  await page.click('.tab[data-tab="fire"]');
+  check("SCH: Fire tab restores verdict", (await page.textContent("#tab-fire")).includes("High Fire Hazard Severity Zone"));
+  check("SCH: fire carriers still 14", await page.locator(".carrier").count() === 14);
+  check("SCH: no JS errors (happy path)", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-schools.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- degraded path: district service fails, no nearby schools → honest labels --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await page.route("**/School_Districts_Current/FeatureServer/**", r => r.abort("failed"));
+  await page.route("**/Public_School_Locations_Current/FeatureServer/**", r => json(r, NCES_SCHOOLS_EMPTY));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="schools"]');
+  await page.waitForSelector("#tab-schools .card", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const sch = await page.textContent("#tab-schools");
+  check("SCH-ERR: district failure labeled honestly (not blank/0)", sch.includes("Couldn’t load") || sch.includes("Not determined"), sch.slice(0, 160));
+  check("SCH-ERR: no schools stated plainly", sch.includes("No public schools found"), sch.slice(0, 200));
+  check("SCH-ERR: finder link-outs still shown", (await page.locator("#tab-schools a[href*=\"nces.ed.gov\"]").count()) === 1 && (await page.locator("#tab-schools a[href*=\"caschooldashboard.org\"]").count()) >= 1);
+  check("SCH-ERR: no JS errors (degraded path)", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
 await browser.close();
 
 let failed = 0;

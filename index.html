@@ -97,6 +97,22 @@
   .badge .dot { width: 10px; height: 10px; border-radius: 50%; flex: none; display: inline-flex; align-items: center; justify-content: center; }
   .badge svg { width: 12px; height: 12px; flex: none; }
 
+  /* ---- tabs ---- */
+  .tabs {
+    display: flex; gap: 2px; margin: 2px 0 16px;
+    border-bottom: 1px solid var(--hairline);
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .tab {
+    font: inherit; font-size: 14px; font-weight: 600;
+    color: var(--text-secondary); background: none; border: none;
+    border-bottom: 2px solid transparent; padding: 9px 13px;
+    cursor: pointer; white-space: nowrap; margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text-primary); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tabpanel[hidden] { display: none; }
+
   /* ---- verdict / result ---- */
   #result { display: none; }
   .matched { font-size: 13px; color: var(--text-secondary); margin: 0 0 12px; }
@@ -161,6 +177,18 @@
   }
   .carrier a.go:hover { border-color: var(--accent); }
 
+  /* ---- schools list ---- */
+  .schoollist { margin-top: 6px; }
+  .schoolrow { padding: 10px 0; border-bottom: 1px solid var(--hairline); }
+  .schoolrow:last-child { border-bottom: none; }
+  .srow-top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .sname { font-weight: 600; font-size: 14.5px; }
+  .sdist { font-variant-numeric: tabular-nums; color: var(--text-secondary); font-size: 13px; white-space: nowrap; flex: none; }
+  .smeta { font-size: 12.5px; color: var(--text-muted); margin-top: 1px; }
+  .slinks { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 14px; }
+  .slinks a { font-size: 13px; color: var(--accent); text-decoration: none; }
+  .slinks a:hover { text-decoration: underline; }
+
   h3.section { font-size: 15.5px; margin: 0 0 4px; }
   .section-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
 
@@ -222,22 +250,31 @@
   <div id="err" class="errbox"></div>
 
   <div id="result">
-    <div class="card" id="verdict-card"></div>
-    <div class="card" id="fires-card" style="display:none"></div>
-    <div class="card">
-      <h3 class="section">Where to get a quote</h3>
-      <p class="section-sub" id="carriers-sub"></p>
-      <div id="carriers"></div>
+    <div class="tabs" id="tabs" role="tablist">
+      <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
+      <button class="tab" data-tab="schools" role="tab">Schools</button>
     </div>
-    <div class="card">
-      <h3 class="section">Check the official maps yourself</h3>
-      <div class="links" id="maplinks"></div>
+
+    <div class="tabpanel" id="tab-fire" role="tabpanel">
+      <div class="card" id="verdict-card"></div>
+      <div class="card" id="fires-card" style="display:none"></div>
+      <div class="card">
+        <h3 class="section">Where to get a quote</h3>
+        <p class="section-sub" id="carriers-sub"></p>
+        <div id="carriers"></div>
+      </div>
+      <div class="card">
+        <h3 class="section">Check the official maps yourself</h3>
+        <div class="links" id="maplinks"></div>
+      </div>
     </div>
+
+    <div class="tabpanel" id="tab-schools" role="tabpanel" hidden></div>
   </div>
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records. Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. This tool is informational, not insurance or financial advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations (Schools tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -261,6 +298,16 @@ const ESRI = "https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServe
 const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 // (US Census geocoder removed: it returns no Access-Control-Allow-Origin header,
 //  so browsers can never read its responses — it only produced console CORS errors.)
+
+// ---- Schools (Phase 1) ----
+// NCES EDGE (Nat'l Center for Education Statistics) — keyless, CORS-open ArcGIS
+// hosted services. School_Districts_Current is a composite of elementary /
+// secondary / unified district layers; a point falls inside its assigned
+// district polygon. Public_School_Locations_Current is a point layer of every
+// public school, queried by radius.
+const NCES_DISTRICTS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/School_Districts_Current/FeatureServer";
+const NCES_DISTRICT_LAYERS = [0, 1, 2]; // elementary / secondary / unified — a point hits its assigned district(s)
+const NCES_SCHOOLS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/Public_School_Locations_Current/FeatureServer/0/query";
 
 /* ================= severity model ================= */
 const SEV = {
@@ -491,6 +538,190 @@ async function firesLookup(lon, lat) {
   return out;
 }
 
+/* ================= schools (Phase 1) ================= */
+// field names vary between NCES layer vintages, so read defensively.
+function pick(a, keys) { for (const k of keys) if (a[k] != null && a[k] !== "") return a[k]; return null; }
+function haversineM(lat1, lon1, lat2, lon2) {
+  const R = 6371000, toR = Math.PI / 180;
+  const dLat = (lat2 - lat1) * toR, dLon = (lon2 - lon1) * toR;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * toR) * Math.cos(lat2 * toR) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+function distTxt(m) {
+  if (m == null) return "";
+  return m < 950 ? Math.round(m / 10) * 10 + " m" : (m / 1000).toFixed(m < 9500 ? 1 : 0) + " km";
+}
+const LEVEL_ORDER = { elementary: 0, primary: 0, middle: 1, "middle school": 1, intermediate: 1, junior: 1, high: 2, secondary: 2 };
+function levelLabel(v) {
+  if (!v) return null;
+  const s = String(v).toLowerCase();
+  if (/elem|primary/.test(s)) return "Elementary";
+  if (/middle|intermediate|junior/.test(s)) return "Middle";
+  if (/high|secondary/.test(s)) return "High";
+  if (/prek|pre-k|kindergarten/.test(s)) return "Early ed";
+  return String(v);
+}
+
+async function districtLookup(lon, lat) {
+  const urls = NCES_DISTRICT_LAYERS.map(i => NCES_DISTRICTS + "/" + i + "/query");
+  const settled = await Promise.allSettled(urls.map(u => queryZoneLayer(u, lon, lat)));
+  if (settled.every(s => s.status === "rejected")) throw new Error("district service failed");
+  const out = [], seen = new Set();
+  for (const s of settled) if (s.status === "fulfilled")
+    for (const a of s.value) {
+      const name = pick(a, ["NAME", "SDNAME", "NAMELSAD", "DISTRICT"]);
+      if (!name || seen.has(String(name))) continue;
+      seen.add(String(name));
+      out.push({ name: String(name), geoid: (pick(a, ["GEOID", "STATE_GEOID"]) || null) && String(pick(a, ["GEOID", "STATE_GEOID"])) });
+    }
+  return out; // may be empty (address outside any mapped district)
+}
+
+async function schoolsNearby(lon, lat) {
+  const u = NCES_SCHOOLS + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    distance: "1600", units: "esriSRUnit_Meter", spatialRel: "esriSpatialRelIntersects",
+    outFields: "*", returnGeometry: "true", outSR: "4326", resultRecordCount: "50", f: "json"
+  });
+  const j = await getJSON(u);
+  const out = [];
+  for (const f of (j.features || [])) {
+    const a = f.attributes || {}, g = f.geometry || {};
+    const name = pick(a, ["NAME", "SCH_NAME", "SCHNAM", "SCHOOLNAME"]);
+    if (!name) continue;
+    const slon = g.x != null ? g.x : pick(a, ["LON", "X", "LONGITUDE", "LONCOD"]);
+    const slat = g.y != null ? g.y : pick(a, ["LAT", "Y", "LATITUDE", "LATCOD"]);
+    const dist = (slon != null && slat != null) ? haversineM(lat, lon, +slat, +slon) : null;
+    out.push({
+      name: String(name),
+      level: levelLabel(pick(a, ["LEVEL", "LEVEL_", "SCHOOL_LEVEL", "GSHI"])),
+      city: (pick(a, ["LCITY", "CITY", "MCITY"]) || null) && String(pick(a, ["LCITY", "CITY", "MCITY"])),
+      cds: (pick(a, ["ST_SCHID", "STSCHID", "CDSCODE", "CDS_CODE"]) || null) && String(pick(a, ["ST_SCHID", "STSCHID", "CDSCODE", "CDS_CODE"])),
+      dist
+    });
+  }
+  out.sort((x, y) => (x.dist == null ? 1e12 : x.dist) - (y.dist == null ? 1e12 : y.dist));
+  return out;
+}
+
+// build a usable CA CDS code (14 digits) from the NCES state-school-id, which
+// for CA is often prefixed ("CA-19647330..."); returns 14 digits or null.
+function cdsDigits(cds) {
+  if (!cds) return null;
+  const d = String(cds).replace(/\D/g, "");
+  return d.length >= 14 ? d.slice(-14) : null;
+}
+function greatSchoolsUrl(name, city) {
+  const q = encodeURIComponent([name, city, "CA"].filter(Boolean).join(" "));
+  return "https://www.greatschools.org/search/search.page?q=" + q;
+}
+
+let schoolsLoaded = false, lastGeo = null;
+function renderSchools(geo, district, schools) {
+  const panel = $("tab-schools");
+  const isLAUSD = district && district.some(d => /los angeles unified/i.test(d.name));
+
+  // 1) district block
+  let distHtml;
+  if (district && district.length) {
+    const names = district.map(d => esc(d.name)).join(" · ");
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:16px">${names}</div>
+      <div class="note">The district whose boundary contains this address</div></div>`;
+  } else if (district) {
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:15px">Not determined</div>
+      <div class="note">No NCES district boundary matched — confirm with the finder link below</div></div>`;
+  } else {
+    distHtml = `<div class="tile"><div class="label">School district (NCES)</div>
+      <div class="value" style="font-size:15px">Couldn’t load</div>
+      <div class="note">The NCES district service didn’t respond — use the finder link below</div></div>`;
+  }
+
+  // 2) nearby schools table
+  let nearbyHtml;
+  if (schools && schools.length) {
+    const rows = schools.slice(0, 10).map(s => {
+      const links = [`<a href="${greatSchoolsUrl(s.name, s.city)}" target="_blank" rel="noopener">GreatSchools ↗</a>`];
+      const cds = cdsDigits(s.cds);
+      if (cds) links.push(`<a href="https://www.caschooldashboard.org/reports/${cds}/2024" target="_blank" rel="noopener">CA Dashboard ↗</a>`);
+      const meta = [s.level, s.city].filter(Boolean).map(esc).join(" · ");
+      return `<div class="schoolrow">
+        <div class="srow-top"><span class="sname">${esc(s.name)}</span><span class="sdist">${s.dist != null ? esc(distTxt(s.dist)) : ""}</span></div>
+        ${meta ? `<div class="smeta">${meta}</div>` : ""}
+        <div class="slinks">${links.join("")}</div>
+      </div>`;
+    }).join("");
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.</p>
+      <div class="schoollist">${rows}</div>
+      ${schools.length > 10 ? `<p class="section-sub" style="margin-top:8px">+ ${schools.length - 10} more within a mile</p>` : ""}`;
+  } else if (schools) {
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">No public schools found within a mile of this point in the NCES locations layer.</p>`;
+  } else {
+    nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
+      <p class="section-sub">Couldn’t load the NCES school-locations service — try the finder links below.</p>`;
+  }
+
+  // 3) authoritative link-outs (always shown — these are the definitive tools)
+  const links = [];
+  if (isLAUSD) links.push([
+    "LAUSD Resident School Identifier ↗", "https://rsi.lausd.net/",
+    "LA Unified’s official tool — enter the address for its exact assigned elementary, middle & high schools"
+  ]);
+  links.push([
+    "NCES School District boundary finder ↗", "https://nces.ed.gov/ccd/schoolmap/",
+    "Federal map — confirm the district and browse schools around any address"
+  ]);
+  links.push([
+    "GreatSchools — search this area ↗", greatSchoolsUrl(geo.label && geo.label.split(",")[1] ? geo.label.split(",")[1].trim() : "", ""),
+    "Parent reviews and 1–10 ratings"
+  ]);
+  links.push([
+    "California School Dashboard ↗", "https://www.caschooldashboard.org/",
+    "The state’s official accountability data by school and district"
+  ]);
+  links.push([
+    "Niche — K-12 schools ↗", "https://www.niche.com/k12/search/best-schools/?state=CA",
+    "Independent grades combining test scores, reviews and outcomes"
+  ]);
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${esc(t)}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  panel.innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <div class="tiles">${distHtml}</div>
+      ${nearbyHtml}
+    </div>
+    <div class="card">
+      <h3 class="section">Confirm assigned schools &amp; ratings</h3>
+      <p class="section-sub">Assignment is set by attendance boundaries, which change — always verify with the official district tool.</p>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
+async function loadSchools() {
+  if (schoolsLoaded || !lastGeo) return;
+  schoolsLoaded = true;
+  const geo = lastGeo;
+  $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up school district &amp; nearby schools…</span></div></div>`;
+  const [dR, sR] = await Promise.allSettled([
+    districtLookup(geo.lon, geo.lat),
+    schoolsNearby(geo.lon, geo.lat)
+  ]);
+  renderSchools(geo,
+    dR.status === "fulfilled" ? dR.value : null,
+    sR.status === "fulfilled" ? sR.value : null);
+}
+function resetTabs() {
+  schoolsLoaded = false;
+  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === "fire"));
+  document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = x.id !== "tab-fire"; });
+  $("tab-schools").innerHTML = "";
+}
+
 /* ================= status UI ================= */
 const STEPS = ["Locating address", "Checking CAL FIRE hazard zones", "Checking FEMA risk index", "Searching fire history (5 km)"];
 function stepRow(i, state) {
@@ -618,6 +849,7 @@ async function run() {
   $("err").style.display = "none";
   $("result").style.display = "none";
   $("status").style.display = "block";
+  resetTabs();
   const states = ["run", "", "", ""];
   renderSteps(states);
 
@@ -631,6 +863,7 @@ async function run() {
       }
       throw new Error("Couldn’t find that address. Try adding the ZIP code (e.g. “…, Glendale, CA 91206”), or paste coordinates as “lat, lon”.");
     }
+    lastGeo = geo;
     states[0] = "ok"; states[1] = "run"; states[2] = "run"; states[3] = "run";
     renderSteps(states);
 
@@ -667,6 +900,14 @@ $("go").addEventListener("click", run);
 $("addr").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
 document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => {
   $("addr").value = ch.dataset.a; run();
+}));
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = true; });
+  t.classList.add("active");
+  const panel = $("tab-" + t.dataset.tab);
+  if (panel) panel.hidden = false;
+  if (t.dataset.tab === "schools") loadSchools();
 }));
 renderCarriers();
 renderMapLinks();

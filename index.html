@@ -201,6 +201,11 @@
     display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
   }
   .dpill .ddot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .racerow { display: grid; grid-template-columns: 9.5em 1fr 3.2em; gap: 8px; align-items: center; font-size: 13px; padding: 2px 0; }
+  .racerow .rlabel { color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .racerow .rbar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--accent) 12%, var(--surface-1)); overflow: hidden; }
+  .racerow .rbar > div { height: 100%; border-radius: 4px; background: var(--accent); }
+  .racerow .rpct { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-primary); }
 
   h3.section { font-size: 15.5px; margin: 0 0 4px; }
   .section-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
@@ -268,7 +273,6 @@
       <button class="tab" data-tab="schools" id="tabbtn-schools" role="tab" aria-selected="false" aria-controls="tab-schools">Schools</button>
       <button class="tab" data-tab="air" id="tabbtn-air" role="tab" aria-selected="false" aria-controls="tab-air">Air &amp; Noise</button>
       <button class="tab" data-tab="move" id="tabbtn-move" role="tab" aria-selected="false" aria-controls="tab-move">Getting Around</button>
-      <button class="tab" data-tab="safety" id="tabbtn-safety" role="tab" aria-selected="false" aria-controls="tab-safety">Safety</button>
       <button class="tab" data-tab="people" id="tabbtn-people" role="tab" aria-selected="false" aria-controls="tab-people">People</button>
     </div>
 
@@ -289,13 +293,12 @@
     <div class="tabpanel" id="tab-schools" role="tabpanel" aria-labelledby="tabbtn-schools" hidden></div>
     <div class="tabpanel" id="tab-air" role="tabpanel" aria-labelledby="tabbtn-air" hidden></div>
     <div class="tabpanel" id="tab-move" role="tabpanel" aria-labelledby="tabbtn-move" hidden></div>
-    <div class="tabpanel" id="tab-safety" role="tabpanel" aria-labelledby="tabbtn-safety" hidden></div>
     <div class="tabpanel" id="tab-people" role="tabpanel" aria-labelledby="tabbtn-people" hidden></div>
   </div>
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -312,10 +315,7 @@
 const CONFIG = Object.assign({
   // Free key from walkscore.com/professional/api.php →
   // inline Walk/Transit/Bike Score® tiles in the Getting Around tab
-  walkscoreKey: "",
-  // Free app token from data.lacity.org (Developer Settings) →
-  // higher rate limits on the LAPD crime queries in the Safety tab
-  socrataAppToken: ""
+  walkscoreKey: ""
 }, window.FIRE_CHECKER_KEYS || {});
 
 /* ================= endpoints ================= */
@@ -419,36 +419,6 @@ const BIKE_LACITY = "https://services1.arcgis.com/tp9wqSVX1AitKgjd/arcgis/rest/s
 const BIKE_COUNTY = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/Non_LAC_Bikeways_(Metro_ATSP)/FeatureServer/0/query";
 const EPA_WALK_VIEWER = "https://epa.maps.arcgis.com/home/webmap/viewer.html?webmap=f16f5e2f84884b93b380cfd4be9f0bba";
 
-// ---- Safety (Phase 4), live-verified Aug 2026 ----
-// Jurisdiction router: LA County Planning's city/community boundary layer —
-// 167 polygons covering the county wall-to-wall (88 incorporated cities + 79
-// named unincorporated communities). JURISDICTION is exactly
-// "INCORPORATED CITY" or "UNINCORPORATED AREA"; CITY_COMM_NAME (uppercase)
-// is the always-populated name.
-const JURIS = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/admin_dist_SDE_DIST_DRP_CITY_COMM_BDY/FeatureServer/0/query";
-// LAPD post-NIBRS-transition open data (the famous 2020-2024 dataset is
-// FROZEN at Dec 2024). Trailing 12 months requires BOTH datasets; their
-// schemas differ ONLY in the location field names. within_circle() does NOT
-// work (coords are plain number columns) — numeric bounding box server-side,
-// true-circle trim client-side. Locations are anonymized to the hundred
-// block; one incident can yield several offense rows (dedupe uniquenibrno
-// only across the datasets' calendar overlap).
-const LAPD_2026 = "https://data.lacity.org/resource/k7nn-b2ep.json"; // 2026+: hndrdth_lat/hndrdth_lon/hndrdth_loc_chk
-const LAPD_2425 = "https://data.lacity.org/resource/y8y3-fqfu.json"; // 2024-25: lat/lon/location
-// LASD (unincorporated county + contract cities): YTD + Historical layers,
-// same schema; INCIDENT_DATE is epoch ms; layers overlap a few weeks at the
-// year boundary — dedupe on INCIDENT_ID. The Historical URL needs its
-// literal %20-encoded spaces (the hyphenated alias 400s).
-const LASD_YTD = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/PART_I_AND_II_CRIMES-YTD/FeatureServer/0/query";
-const LASD_HIST = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/Sheriff%20Part%201%20and%202%20Crimes%20(Historical)/FeatureServer/0/query";
-// 2024 crime rates per 100k — CA DOJ "Crimes & Clearances" counts ÷ Census
-// July-2024 city population (Glendale 530 violent & 3,733 property ÷ 187,823;
-// LA 29,089 & 102,289 ÷ 3,878,704). Note: the oft-quoted ~1,484 LA property
-// rate did NOT verify — official counts put it ~2,600/100k.
-const CITY_RATES = {
-  "GLENDALE":    { v: 282, p: 1988 },
-  "LOS ANGELES": { v: 750, p: 2637 }
-};
 // ---- People (Phase 5) + Noise (Phase 6), live-verified Aug 2026 ----
 // Esri Living Atlas "(Latest)" ACS views (owner esri_demographics), keyless,
 // CORS *; layer 2 = census tract. Vintage was ACS 2020-2024 5-year at last
@@ -459,30 +429,22 @@ const ACS_BASE = "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/servi
 const ACS_INCOME = ACS_BASE + "ACS_Median_Household_Income_View_Boundaries/FeatureServer/2/query";
 const ACS_EDU = ACS_BASE + "ACS_Educational_Attainment_View_Boundaries/FeatureServer/2/query";
 const ACS_HOUSING = ACS_BASE + "ACS_Housing_Units_Occupancy_View_Boundaries/FeatureServer/2/query";
+const ACS_RACE = ACS_BASE + "ACS_Race_and_Hispanic_Origin_View_Boundaries/FeatureServer/2/query";
+const ACS_AGE = ACS_BASE + "ACS_Median_Age_View_Boundaries/FeatureServer/2/query";
 // Noise: the BTS/Esri Transportation Noise raster is TilesOnly (no identify;
 // a point read needs a client-side LERC2 decoder — a dependency this app
 // deliberately doesn't take). Instead: verified proximity fallbacks — the
 // NTAD rail-network layer (CORS *; RROWNER1 SCAX = Metrolink, PASSNGR B =
-// "Amtrak & Commuter", NET M = main line) and LA County's airport
-// noise-contour layer (CNEL dB CLASS; LA County airports only) — plus a
-// link-out to the official viewer (maps.dot.gov; note www.bts.gov 403s
-// datacenter IPs, don't link or health-check it).
+// "Amtrak & Commuter", NET M = main line) and the AGOL-hosted LA County
+// airport noise-contour layer — plus a link-out to the official viewer
+// (maps.dot.gov; note www.bts.gov 403s datacenter IPs, don't link it).
 const RAIL_LINES = "https://services.arcgis.com/xOi1kZaI0eWDREZv/arcgis/rest/services/NTAD_North_American_Rail_Network_Lines/FeatureServer/0/query";
 // County DRP/ALUC airport noise contours — the AGOL-hosted copy (owner
-// lacounty_isd, CORS *). The county's own on-prem server
-// (arcgis.gis.lacounty.gov DRP/Open_Data/MapServer/47) serves the same data
-// but failed intermittently in real browsers — don't switch back to it.
+// lacounty_isd, CORS *). The county's own on-prem server serves the same
+// data but failed intermittently in real browsers — don't switch back.
 // Contours are ring-band polygons; a point can sit in several, take max CLASS.
 const AIRPORT_NOISE = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/eGIS_Transportation_Hosted_Layers/FeatureServer/5/query";
 const NOISE_VIEWER = "https://maps.dot.gov/BTS/NationalTransportationNoiseMap/";
-
-// Glendale PD publishes no incident-level open data; these official pages
-// were content-verified via a browser-grade fetch (glendaleca.gov's Akamai
-// edge 403s ALL curl traffic by TLS fingerprint — do not health-check these
-// with curl; they load fine in real browsers).
-const GPD_LIVE = "https://www.glendaleca.gov/government/departments/police-department/crime-prevention-crime-statistics";
-const GPD_STATS = "https://www.glendaleca.gov/government/departments/police-department/community-outreach-resources-and-engagement-c-o-r-e/crime-prevention-programs-resources/crime-statistics-booking-logs";
-const GPD_MAP = "https://www.crimemapping.com/map/agency/136"; // linked as GPD's map by the city's own site
 
 /* ================= severity model ================= */
 const SEV = {
@@ -949,7 +911,6 @@ const lazyTabs = {
   schools: { loaded: false, load: loadSchools },
   air:     { loaded: false, load: loadAir },
   move:    { loaded: false, load: loadMove },
-  safety:  { loaded: false, load: loadSafety },
   people:  { loaded: false, load: loadPeople }
 };
 function renderSchools(geo, district, schools, assigned, dash) {
@@ -1325,15 +1286,28 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
 async function acsLookup(lon, lat) {
   const q = (base, outFields) => getJSON(arcgisPointQuery(base, lon, lat, { outFields }))
     .then(j => { const f = (j.features || [])[0]; return f ? f.attributes : null; });
-  const [inc, edu, hou] = await Promise.allSettled([
+  const [inc, edu, hou, race, age] = await Promise.allSettled([
     q(ACS_INCOME, "GEOID,NAME,B19049_001E,B19049_001M"),
     q(ACS_EDU, "GEOID,NAME,B15002_001E,B15002_calc_numGEBAE,B15002_calc_pctGEBAE"),
-    q(ACS_HOUSING, "GEOID,NAME,B25003_001E,B25003_002E,B25003_calc_pctOwnE,B25077_001E")
+    q(ACS_HOUSING, "GEOID,NAME,B25003_001E,B25003_002E,B25003_calc_pctOwnE,B25077_001E"),
+    q(ACS_RACE, "GEOID,NAME,B03002_001E,B03002_calc_pctHispLatE,B03002_calc_pctNHWhiteE,B03002_calc_pctBlackE,B03002_calc_pctAsianE,B03002_calc_pct2OrMoreE,B03002_calc_pctOtherE,B03002_calc_pctAIANE,B03002_calc_pctNHOPIE"),
+    q(ACS_AGE, "GEOID,NAME,B01001_001E,B01002_001E,B01002_001M")
   ]);
-  if ([inc, edu, hou].every(s => s.status === "rejected")) throw new Error("acs failed");
+  if ([inc, edu, hou, race, age].every(s => s.status === "rejected")) throw new Error("acs failed");
   const v = s => s.status === "fulfilled" ? s.value : undefined; // undefined = that service failed
-  return { inc: v(inc), edu: v(edu), hou: v(hou) };
+  return { inc: v(inc), edu: v(edu), hou: v(hou), race: v(race), age: v(age) };
 }
+// non-Hispanic race groups + Hispanic/Latino ethnicity, ACS table B03002
+const RACE_FIELDS = [
+  ["B03002_calc_pctHispLatE", "Hispanic or Latino"],
+  ["B03002_calc_pctNHWhiteE", "White"],
+  ["B03002_calc_pctAsianE", "Asian"],
+  ["B03002_calc_pctBlackE", "Black"],
+  ["B03002_calc_pct2OrMoreE", "Two or more races"],
+  ["B03002_calc_pctAIANE", "Native American"],
+  ["B03002_calc_pctNHOPIE", "Pacific Islander"],
+  ["B03002_calc_pctOtherE", "Other"]
+];
 // tract estimates are top-coded: 250001 = ">$250k" income, 2000001 = ">$2M" home value
 function dollars(v, topCode, topLabel) {
   if (v == null) return null;
@@ -1345,8 +1319,8 @@ function renderPeople(geo, acs) {
   let body, geoid = null, tractName = null;
   if (!acs) body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
   else {
-    const any = acs.inc || acs.edu || acs.hou;
-    if (acs.inc === null && acs.edu === null && acs.hou === null) {
+    const any = acs.inc || acs.edu || acs.hou || acs.race || acs.age;
+    if (acs.inc === null && acs.edu === null && acs.hou === null && acs.race === null && acs.age === null) {
       body = `<p class="section-sub">No census tract found at this location.</p>`;
     } else if (!any) {
       body = `<p class="section-sub">Couldn’t load the census services — use the links below.</p>`;
@@ -1375,7 +1349,29 @@ function renderPeople(geo, acs) {
         : (acs.hou && acs.hou.B25077_001E != null)
           ? tile("Median home value", esc(dollars(acs.hou.B25077_001E, 2000001, ">$2M")), "owner-occupied units, self-reported")
           : noneTile("Median home value");
-      body = `<div class="tiles">${incTile}${eduTile}${ownTile}${valTile}</div>
+      const ageTile = acs.age === undefined ? failTile("Median age")
+        : (acs.age && acs.age.B01002_001E != null)
+          ? tile("Median age", esc(String(acs.age.B01002_001E)), acs.age.B01002_001M != null ? "± " + esc(String(acs.age.B01002_001M)) + " years margin of error" : "")
+          : noneTile("Median age");
+      const popTile = (acs.age && acs.age.B01001_001E != null)
+        ? tile("Tract population", esc(Math.round(acs.age.B01001_001E).toLocaleString()), "people in this census tract")
+        : "";
+
+      // race / ethnicity breakdown as labeled bars, largest first
+      let raceHtml = "";
+      if (acs.race === undefined) raceHtml = `<p class="section-sub" style="margin-top:12px">Couldn’t load the race/ethnicity service.</p>`;
+      else if (acs.race) {
+        const rows = RACE_FIELDS
+          .map(([f, label]) => ({ label, pct: acs.race[f] }))
+          .filter(r => r.pct != null && r.pct >= 0.5)
+          .sort((a, b) => b.pct - a.pct);
+        if (rows.length) raceHtml = `
+          <h3 class="section" style="margin-top:16px">Race &amp; ethnicity</h3>
+          <div>${rows.map(r => `<div class="racerow"><span class="rlabel">${esc(r.label)}</span><div class="rbar"><div style="width:${Math.min(100, r.pct)}%"></div></div><span class="rpct">${esc(String(r.pct))}%</span></div>`).join("")}</div>
+          <p class="section-sub" style="margin-top:6px">Groups under 0.5% not shown; race groups are non-Hispanic (Census ACS convention), so the bars sum to ~100%.</p>`;
+      }
+      body = `<div class="tiles">${incTile}${eduTile}${ownTile}${valTile}${ageTile}${popTile}</div>
+        ${raceHtml}
         <p class="section-sub" style="margin-top:8px">${tractName ? esc(tractName) + " · " : ""}Census ACS 5-year estimates (latest release — 2020-2024 at last verification). Tract-level estimates carry real margins of error; treat them as a picture of the immediate neighborhood, not the block.</p>`;
     }
   }
@@ -1410,221 +1406,6 @@ async function loadPeople() {
   try { acs = await acsLookup(geo.lon, geo.lat); } catch (e) {}
   if (geo !== lastGeo) return; // a new search started — never render stale data
   renderPeople(geo, acs);
-}
-
-/* ================= safety (Phase 4) ================= */
-function isoDaysAgo(days) {
-  return new Date(Date.now() - days * 864e5).toISOString().slice(0, 10);
-}
-// "594(B)(1) - PC - F - Vandalism ($400 Or More) - Felony - 290" → the readable middle
-function nibrsDesc(s) {
-  const t = String(s).replace(/\s+-\s+\w+$/, "").replace(/^.*? - [A-Z]{2,3} - [A-Z] - /, "");
-  return t || String(s);
-}
-
-async function jurisdictionLookup(lon, lat) {
-  const atts = await queryZoneLayer(JURIS, lon, lat);
-  const a = atts[0];
-  if (!a || !a.CITY_COMM_NAME) return { none: true }; // outside LA County
-  return { name: String(a.CITY_COMM_NAME), incorporated: a.JURISDICTION === "INCORPORATED CITY" };
-}
-
-async function lapdLookup(lon, lat) {
-  const cutoff = isoDaysAgo(365) + "T00:00:00";
-  const dLat = 500 / 111320, dLon = 500 / (111320 * Math.cos(lat * Math.PI / 180));
-  const q = (base, latF, lonF) => {
-    const p = {
-      "$where": `${latF} between ${lat - dLat} and ${lat + dLat} AND ${lonF} between ${lon - dLon} and ${lon + dLon} AND date_occ >= '${cutoff}'`,
-      "$order": "date_occ DESC", "$limit": "500"
-    };
-    if (CONFIG.socrataAppToken) p["$$app_token"] = CONFIG.socrataAppToken;
-    return getJSON(base + "?" + new URLSearchParams(p));
-  };
-  const settled = await Promise.allSettled([
-    q(LAPD_2026, "hndrdth_lat", "hndrdth_lon"),
-    q(LAPD_2425, "lat", "lon")
-  ]);
-  if (settled.every(s => s.status === "rejected")) throw new Error("lapd failed");
-  const seen = new Set(), rows = [];
-  const take = (recs, latF, lonF, locF) => {
-    for (const r of (recs || [])) {
-      const rlat = +r[latF], rlon = +r[lonF];
-      if (!rlat || !rlon) continue;                          // anonymized rows can have 0/null coords
-      if (haversineM(lat, lon, rlat, rlon) > 500) continue;  // bbox → true circle
-      const id = r.uniquenibrno || (r.caseno + "|" + r.nibr_code);
-      if (seen.has(id)) continue;
-      seen.add(id);
-      rows.push({ date: String(r.date_occ || "").slice(0, 10), desc: nibrsDesc(r.nibr_description), addr: r[locF] ? String(r[locF]) : null, against: r.crime_against ? String(r.crime_against) : null });
-    }
-  };
-  if (settled[0].status === "fulfilled") take(settled[0].value, "hndrdth_lat", "hndrdth_lon", "hndrdth_loc_chk");
-  if (settled[1].status === "fulfilled") take(settled[1].value, "lat", "lon", "location");
-  rows.sort((x, y) => y.date < x.date ? -1 : 1);
-  // a dataset returning exactly $limit rows means the true count is higher
-  rows.capped = settled.some(s => s.status === "fulfilled" && Array.isArray(s.value) && s.value.length >= 500);
-  return { rows, partial: settled.some(s => s.status === "rejected") };
-}
-
-async function lasdLookup(lon, lat) {
-  const q = base => getJSON(base + "?" + new URLSearchParams({
-    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
-    spatialRel: "esriSpatialRelIntersects", distance: "500", units: "esriSRUnit_Meter",
-    where: "INCIDENT_DATE >= TIMESTAMP '" + isoDaysAgo(365) + " 00:00:00'",
-    outFields: "INCIDENT_DATE,CATEGORY,STAT_DESC,STREET,CITY,PART_CATEGORY,INCIDENT_ID",
-    orderByFields: "INCIDENT_DATE DESC", resultRecordCount: "500",
-    returnGeometry: "false", f: "json"
-  }));
-  const settled = await Promise.allSettled([q(LASD_YTD), q(LASD_HIST)]);
-  if (settled.every(s => s.status === "rejected")) throw new Error("lasd failed");
-  const seen = new Set(), rows = [];
-  for (const s of settled) if (s.status === "fulfilled")
-    for (const f of (s.value.features || [])) {
-      const a = f.attributes || {};
-      const id = a.INCIDENT_ID || JSON.stringify(a);
-      if (seen.has(id)) continue;                            // YTD & Historical overlap at the year boundary
-      seen.add(id);
-      rows.push({
-        date: a.INCIDENT_DATE ? new Date(a.INCIDENT_DATE).toISOString().slice(0, 10) : "",
-        desc: a.STAT_DESC ? titleCase(String(a.STAT_DESC)) : (a.CATEGORY ? titleCase(String(a.CATEGORY)) : "—"),
-        addr: a.STREET ? titleCase(String(a.STREET)) : null,
-        part: String(a.PART_CATEGORY || "")
-      });
-    }
-  rows.sort((x, y) => y.date < x.date ? -1 : 1);
-  rows.capped = settled.some(s => s.status === "fulfilled" && s.value && s.value.exceededTransferLimit === true);
-  return { rows, partial: settled.some(s => s.status === "rejected") };
-}
-
-function incidentRows(rows, n) {
-  return rows.slice(0, n).map(r => `<div class="schoolrow">
-    <div class="srow-top"><span class="sname" style="font-weight:500">${esc(r.desc)}</span><span class="sdist">${esc(r.date)}</span></div>
-    ${r.addr ? `<div class="smeta">${esc(r.addr)}</div>` : ""}
-  </div>`).join("");
-}
-
-function renderSafety(geo, juris, data) {
-  // 1) jurisdiction card
-  let jHtml;
-  if (!juris) jHtml = `<p class="section-sub">Couldn’t load the LA County boundary service — jurisdiction unknown. Use the links below.</p>`;
-  else if (juris.none) jHtml = `<p class="section-sub">This address is outside LA County — this tab’s police-data sources cover LA County only.</p>`;
-  else {
-    const served = !juris.incorporated ? "Unincorporated LA County — served by the LA County Sheriff’s Dept."
-      : juris.name === "LOS ANGELES" ? "Incorporated city — served by LAPD"
-      : juris.name === "GLENDALE" ? "Incorporated city — served by the Glendale Police Dept."
-      : "Incorporated city with its own police department";
-    jHtml = `<div class="tiles"><div class="tile"><div class="label">Police jurisdiction</div>
-      <div class="value" style="font-size:17px">${esc(titleCase(juris.name))}</div>
-      <div class="note">${esc(served)}</div></div></div>`;
-  }
-
-  // 2) incidents / links card, by jurisdiction kind
-  let body = "";
-  if (data && data.kind === "lapd") {
-    if (data.failed) body = `<h3 class="section">Reported offenses nearby (LAPD)</h3>
-      <p class="section-sub">Couldn’t load the LAPD open-data service — use the dataset links below.</p>`;
-    else {
-      const buckets = { Person: 0, Property: 0, Society: 0 };
-      for (const r of data.rows) for (const b of String(r.against || "").split(/,\s*/)) if (buckets[b] != null) buckets[b]++;
-      body = `<h3 class="section">Reported offenses nearby (LAPD)</h3>
-        <div class="tiles"><div class="tile"><div class="label">Offenses within 500 m · last 12 months</div>
-          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
-          <div class="note">Against people ×${buckets.Person} · property ×${buckets.Property} · society ×${buckets.Society}</div></div></div>
-        ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No offenses recorded within 500 m in the last 12 months.</p>`}
-        ${data.partial ? `<div class="warnbox">One of the two LAPD datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
-        <p class="section-sub" style="margin-top:8px">Locations are anonymized to the hundred block; one incident can appear as several offense records (and an offense can count against multiple categories); publication runs ~2 weeks behind. LAPD NIBRS datasets, LA City open data.</p>`;
-    }
-  } else if (data && data.kind === "lasd") {
-    if (data.failed) body = `<h3 class="section">Reported crimes nearby (LA Sheriff)</h3>
-      <p class="section-sub">Couldn’t load the Sheriff’s open-data service — use the links below.</p>`;
-    else {
-      const p1 = data.rows.filter(r => r.part === "1").length, p2 = data.rows.filter(r => r.part === "2").length;
-      body = `<h3 class="section">Reported crimes nearby (LA Sheriff)</h3>
-        <div class="tiles"><div class="tile"><div class="label">Incidents within 500 m · last 12 months</div>
-          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
-          <div class="note">Part I (serious) ×${p1} · Part II ×${p2}</div></div></div>
-        ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No incidents recorded within 500 m in the last 12 months.</p>`}
-        ${data.partial ? `<div class="warnbox">One of the two Sheriff datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
-        <p class="section-sub" style="margin-top:8px">Locations are block-level; publication runs ~3–4 weeks behind. LASD Part I &amp; II crime layers, LA County open data.</p>`;
-    }
-  } else if (data && data.kind === "glendale") {
-    body = `<h3 class="section">Glendale PD</h3>
-      <p class="section-sub">Glendale publishes <strong>no incident-level open data</strong> this tool could query — use its official live log and map instead:</p>
-      <div class="links">
-        <div><a href="${GPD_LIVE}" target="_blank" rel="noopener">Live Calls-for-Service log ↗</a><div class="ldesc">Police activity of the last ~72 hours, refreshed about every 30 minutes</div></div>
-        <div><a href="${GPD_STATS}" target="_blank" rel="noopener">Crime statistics &amp; booking logs ↗</a><div class="ldesc">Monthly NIBRS stats PDFs (through the current year) and daily booking logs</div></div>
-        <div><a href="${GPD_MAP}" target="_blank" rel="noopener">Glendale crime map (CrimeMapping.com) ↗</a><div class="ldesc">The mapping vendor Glendale PD publishes incidents to</div></div>
-      </div>
-      <p class="section-sub" style="margin-top:10px">Response times from GPD’s own annual reports: emergency calls averaged <strong>5:13 call-to-scene</strong> (2:58 dispatch-to-scene) in 2023, and <strong>2:45 dispatch-to-scene</strong> in 2025.
-        <a href="https://issuu.com/glendalepd/docs/gpd_2023_annual_report_revised_05.2024_" target="_blank" rel="noopener">2023 report ↗</a> ·
-        <a href="https://issuu.com/glendalepd/docs/glendale_police_department_2025_annual_report" target="_blank" rel="noopener">2025 report ↗</a></p>`;
-  } else if (data && data.kind === "city") {
-    body = `<h3 class="section">${esc(titleCase(juris.name))} Police</h3>
-      <p class="section-sub">${esc(titleCase(juris.name))} runs its own police department, which doesn’t publish incident-level open data this tool can query. Many agencies publish to CrimeMapping.com — check there, and verify with the department directly.</p>`;
-  } else if (juris && !juris.none) {
-    body = `<p class="section-sub">Couldn’t load incident data for this jurisdiction — use the links below.</p>`;
-  }
-
-  // 3) city-context rates (only the two cities with verified figures)
-  let ratesHtml = "";
-  if (juris && !juris.none && CITY_RATES[juris.name]) {
-    const tile = (city, r) => `
-      <div class="tile"><div class="label">${esc(titleCase(city))} · violent</div><div class="value">${r.v} <small>/100k</small></div></div>
-      <div class="tile"><div class="label">${esc(titleCase(city))} · property</div><div class="value">${r.p.toLocaleString()} <small>/100k</small></div></div>`;
-    ratesHtml = `<div class="card">
-      <h3 class="section">City crime rates, 2024</h3>
-      <p class="section-sub">Reported crimes per 100,000 residents — CA DOJ counts ÷ Census July-2024 population. Shown for comparison; neighborhoods vary hugely within a city.</p>
-      <div class="tiles">${tile("GLENDALE", CITY_RATES.GLENDALE)}${tile("LOS ANGELES", CITY_RATES["LOS ANGELES"])}</div>
-    </div>`;
-  }
-
-  const links = [
-    ["FBI Crime Data Explorer ↗", "https://cde.ucr.cjis.gov/", "Official national crime statistics by agency and city"],
-    ["CA DOJ OpenJustice ↗", "https://openjustice.doj.ca.gov/data", "The state crime counts behind the rate figures above"],
-    ["CrimeMapping.com ↗", "https://www.crimemapping.com/", "Incident map covering many local agencies (incl. Glendale PD &amp; LASD)"],
-    ["LAPD NIBRS offenses 2026– ↗", "https://data.lacity.org/d/k7nn-b2ep", "The current LAPD dataset queried here"],
-    ["LAPD NIBRS offenses 2024–25 ↗", "https://data.lacity.org/d/y8y3-fqfu", "The companion dataset covering the rest of the 12-month window"],
-    ["LASD Part I &amp; II crimes ↗", "https://www.arcgis.com/home/item.html?id=5e055d13feba4a7b9ee25a905a11f244", "The Sheriff’s year-to-date crime layer"]
-  ];
-  const linksHtml = links.map(([t, u, d]) =>
-    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${d}</div></div>`).join("");
-
-  $("tab-safety").innerHTML = `
-    <div class="card">
-      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
-      ${jHtml}
-      ${body ? `<div style="margin-top:14px">${body}</div>` : ""}
-    </div>
-    ${ratesHtml}
-    <div class="card">
-      <h3 class="section">Check the sources yourself</h3>
-      <div class="links">${linksHtml}</div>
-    </div>`;
-}
-
-async function loadSafety() {
-  if (lazyTabs.safety.loaded || !lastGeo) return;
-  lazyTabs.safety.loaded = true;
-  const geo = lastGeo;
-  $("tab-safety").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking jurisdiction &amp; reported crime nearby…</span></div></div>`;
-  let juris = null;
-  try { juris = await jurisdictionLookup(geo.lon, geo.lat); } catch (e) {}
-  if (geo !== lastGeo) return; // a new search started — never render stale data
-  let data = null;
-  if (juris && !juris.none) {
-    if (juris.incorporated && juris.name === "LOS ANGELES") {
-      try { data = Object.assign({ kind: "lapd" }, await lapdLookup(geo.lon, geo.lat)); }
-      catch (e) { data = { kind: "lapd", failed: true }; }
-    } else if (!juris.incorporated) {
-      try { data = Object.assign({ kind: "lasd" }, await lasdLookup(geo.lon, geo.lat)); }
-      catch (e) { data = { kind: "lasd", failed: true }; }
-    } else if (juris.name === "GLENDALE") {
-      data = { kind: "glendale" };
-    } else {
-      data = { kind: "city" };
-    }
-  }
-  if (geo !== lastGeo) return;
-  renderSafety(geo, juris, data);
 }
 
 /* ================= getting around (Phase 3) ================= */
@@ -1702,7 +1483,15 @@ async function stopsLookup(lon, lat) {
   return { radius: 1600, stops: await ring(1600) };
 }
 
-const BIKE_CLASS = { 1: "Class I path (off-street)", 2: "Class II bike lane", 3: "Class III shared route", 4: "Class IV protected lane" };
+// plain-language bikeway types, ordered best-first (the Caltrans class
+// numbers mean nothing to non-planners; what matters is separation from cars)
+const BIKE_TYPES = {
+  1: { name: "Car-free bike path", plural: "Car-free bike paths", what: "an off-street trail fully separated from cars (Caltrans Class I)" },
+  4: { name: "Protected bike lane", plural: "Protected bike lanes", what: "an on-street lane with a physical barrier from traffic (Class IV)" },
+  2: { name: "Painted bike lane", plural: "Painted bike lanes", what: "a striped lane on the road — no barrier between you and traffic (Class II)" },
+  3: { name: "Shared streets only", plural: "Shared streets", what: "signs or sharrows only — you ride in the traffic lane with cars (Class III)" }
+};
+const BIKE_ORDER = [1, 4, 2, 3];
 async function bikesLookup(lon, lat) {
   const [cityR, countyR] = await Promise.allSettled([
     queryZoneLayer(BIKE_LACITY, lon, lat, 500),
@@ -1711,23 +1500,28 @@ async function bikesLookup(lon, lat) {
   if (cityR.status === "fulfilled") {
     const cur = cityR.value.filter(a => !String(a.Retire || "").trim()); // 'X' = superseded facility
     if (cur.length) {
-      const byClass = {}, streets = [];
+      const classes = {};
       for (const a of cur) {
-        if (typeof a.Class === "number") byClass[a.Class] = (byClass[a.Class] || 0) + 1;
+        if (typeof a.Class !== "number" || !BIKE_TYPES[a.Class]) continue;
+        const e = classes[a.Class] || (classes[a.Class] = { count: 0, streets: [] });
+        e.count++;
         const st = a.ST_NAME && titleCase(String(a.ST_NAME).trim()).replace(/^La River/, "LA River");
-        if (st && !streets.includes(st)) streets.push(st);
+        if (st && !e.streets.includes(st)) e.streets.push(st);
       }
-      return { src: "lacity", count: cur.length, byClass, streets };
+      return { src: "lacity", count: cur.length, classes };
     }
   }
   if (countyR.status === "fulfilled") {
-    const feats = countyR.value.filter(a => typeof a.class === "number" && a.class >= 1);
-    const byClass = {};
-    for (const a of feats) byClass[a.class] = (byClass[a.class] || 0) + 1;
+    const feats = countyR.value.filter(a => typeof a.class === "number" && BIKE_TYPES[a.class]);
+    const classes = {};
+    for (const a of feats) {
+      const e = classes[a.class] || (classes[a.class] = { count: 0, streets: [] });
+      e.count++;
+    }
     // the countywide layer covers all of LA County, so its empty result is a
     // trustworthy "none" — the LA City layer's empty result is not (the point
     // may simply be outside LA City), so never report "none" from it alone
-    return { src: "county", count: feats.length, byClass, streets: [] };
+    return { src: "county", count: feats.length, classes };
   }
   throw new Error("bikeways failed");
 }
@@ -1792,14 +1586,21 @@ function renderMove(geo, walk, transit, bikes, ws) {
   if (!bikes) bikeBody = `<p class="section-sub">Couldn’t load the bikeway inventories.</p>`;
   else if (!bikes.count) bikeBody = `<p class="section-sub">No existing bikeway within 500 m in the ${bikes.src === "lacity" ? "LA City" : "countywide"} inventory.</p>`;
   else {
-    const classes = Object.keys(bikes.byClass).sort().map(c => `${esc(BIKE_CLASS[c] || "Class " + c)} ×${bikes.byClass[c]}`).join(" · ");
+    const present = BIKE_ORDER.filter(c => bikes.classes[c]);
+    const best = present[0];
+    const lines = present.map(c => {
+      const e = bikes.classes[c];
+      const streets = e.streets.slice(0, 4).join(", ") + (e.streets.length > 4 ? ` +${e.streets.length - 4} more` : "");
+      return `<strong>${esc(BIKE_TYPES[c].plural)} ×${e.count}</strong>${e.streets.length ? ": " + esc(streets) : ""}`;
+    }).join("<br>");
     bikeBody = `
       <div class="tiles">
-        <div class="tile"><div class="label">Bikeway segments within 500 m</div>
-          <div class="value">${bikes.count}</div>
-          <div class="note">${bikes.src === "lacity" ? "LA City DOT inventory, current facilities only" : "Metro countywide inventory (existing facilities)"}</div></div>
+        <div class="tile"><div class="label">Best bike infrastructure within 500 m</div>
+          <div class="value" style="font-size:17px">${esc(BIKE_TYPES[best].name)}</div>
+          <div class="note">${esc(BIKE_TYPES[best].what)}</div></div>
       </div>
-      <p class="section-sub" style="margin-top:8px">${classes}${bikes.streets.length ? `<br>On: ${esc(bikes.streets.slice(0, 6).join(", "))}${bikes.streets.length > 6 ? "…" : ""}` : ""}</p>`;
+      <p class="section-sub" style="margin-top:8px">${lines}</p>
+      <p class="section-sub">${bikes.src === "lacity" ? "LA City DOT inventory, current facilities only" : "Metro countywide inventory (existing facilities; street names not published)"} · counts are map segments — one street usually spans several</p>`;
   }
 
   const links = [

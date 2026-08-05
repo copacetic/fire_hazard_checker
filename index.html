@@ -284,7 +284,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Traffic tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Traffic tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -370,6 +370,27 @@ const OPENMETEO_AQ = "https://air-quality-api.open-meteo.com/v1/air-quality";
 // CARB Air Quality & Land Use Handbook (the 500-ft freeway advisory) — the
 // old 2021-12 URL 404s; this 2023-05 path is the live one.
 const CARB_HANDBOOK = "https://ww2.arb.ca.gov/sites/default/files/2023-05/Land%20Use%20Handbook_0.pdf";
+
+// ---- Getting Around (Phase 3), live-verified Aug 2026 ----
+// EPA National Walkability Index: the canonical geodata.epa.gov layer now
+// serves the CURRENT release (Tyburn block group scores 12.7, not the 15.2
+// of the old dataset); the ArcGIS Online mirror still hosts the older
+// 2010-vintage index (and lower-cases field D4a) — used only as a fallback,
+// labeled as older data. Sentinel: -99999 = no transit in range.
+const EPA_WALK = "https://geodata.epa.gov/arcgis/rest/services/OA/WalkabilityIndex/MapServer/0/query";
+const EPA_WALK_MIRROR = "https://services2.arcgis.com/j80Jz20at6Bi0thr/ArcGIS/rest/services/National_Walkability_Index/FeatureServer/0/query";
+// LA Metro stops, Dec 2024 GTFS extract (last edited May 2025 — the newest
+// full stop inventory on Metro's org). Only 3 fields (stop_id/stop_name), no
+// lines-served, and ONLY LACMTA: municipal buses (Glendale Beeline, LADOT
+// DASH, Big Blue Bus) are not in this layer — disclaimed in the UI.
+const METRO_STOPS = "https://services5.arcgis.com/7nsPwEMP38bSkCjy/ArcGIS/rest/services/LACMTAstopsDEC24_view/FeatureServer/0/query";
+// Bikeways: LA City DOT inventory (fine-grained; Retire='X' rows are
+// superseded facilities and must be filtered) with Metro's countywide
+// existing-bikeways layer as the fallback outside LA City (covers Glendale;
+// class ints only, names mostly blank).
+const BIKE_LACITY = "https://services1.arcgis.com/tp9wqSVX1AitKgjd/arcgis/rest/services/LA_City_Bikeways/FeatureServer/0/query";
+const BIKE_COUNTY = "https://services.arcgis.com/RmCCgQtiZLDCtblq/arcgis/rest/services/Non_LAC_Bikeways_(Metro_ATSP)/FeatureServer/0/query";
+const EPA_WALK_VIEWER = "https://epa.maps.arcgis.com/home/webmap/viewer.html?webmap=f16f5e2f84884b93b380cfd4be9f0bba";
 
 /* ================= severity model ================= */
 const SEV = {
@@ -1039,11 +1060,181 @@ function renderAir(geo, hw, aadt, ces, aq) {
     </div>`;
 }
 
+/* ================= getting around (Phase 3) ================= */
+function walkTier(v) {
+  if (v <= 5.75) return "Least walkable";
+  if (v <= 10.5) return "Below-average walkable";
+  if (v <= 15.25) return "Above-average walkable";
+  return "Most walkable";
+}
+function walkScoreUrl(label) {
+  // lowercase slug: walkscore.com 301s mixed case to the lowercase canonical
+  const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  return "https://www.walkscore.com/score/" + slug;
+}
+function titleCase(s) {
+  return String(s).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/^La /, "LA ");
+}
+
+async function walkLookup(lon, lat) {
+  try {
+    const j = await getJSON(arcgisPointQuery(EPA_WALK, lon, lat, { outFields: "NatWalkInd,D4A,GEOID10,TotPop" }));
+    const f = (j.features || [])[0];
+    return f ? { ind: f.attributes.NatWalkInd, geoid: f.attributes.GEOID10, src: "epa" } : null;
+  } catch (e) {
+    // mirror hosts the OLDER 2010-vintage index (and spells the field D4a)
+    const j2 = await getJSON(arcgisPointQuery(EPA_WALK_MIRROR, lon, lat, { outFields: "NatWalkInd,D4a,GEOID10" }));
+    const f2 = (j2.features || [])[0];
+    return f2 ? { ind: f2.attributes.NatWalkInd, geoid: f2.attributes.GEOID10, src: "mirror" } : null;
+  }
+}
+
+async function stopsLookup(lon, lat) {
+  async function ring(d) {
+    const u = METRO_STOPS + "?" + new URLSearchParams({
+      geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+      distance: String(d), units: "esriSRUnit_Meter", spatialRel: "esriSpatialRelIntersects",
+      outFields: "stop_id,stop_name", returnGeometry: "true", outSR: "4326",
+      resultRecordCount: "100", f: "json"
+    });
+    const j = await getJSON(u);
+    const out = [];
+    for (const f of (j.features || [])) {
+      const a = f.attributes || {}, g = f.geometry || {};
+      if (!a.stop_name) continue;
+      out.push({ name: String(a.stop_name), dist: (g.x != null && g.y != null) ? haversineM(lat, lon, g.y, g.x) : null });
+    }
+    out.sort((x, y) => (x.dist == null ? 1e12 : x.dist) - (y.dist == null ? 1e12 : y.dist));
+    return out;
+  }
+  const near = await ring(800);
+  if (near.length) return { radius: 800, stops: near };
+  return { radius: 1600, stops: await ring(1600) };
+}
+
+const BIKE_CLASS = { 1: "Class I path (off-street)", 2: "Class II bike lane", 3: "Class III shared route", 4: "Class IV protected lane" };
+async function bikesLookup(lon, lat) {
+  const [cityR, countyR] = await Promise.allSettled([
+    queryZoneLayer(BIKE_LACITY, lon, lat, 500),
+    queryZoneLayer(BIKE_COUNTY, lon, lat, 500)
+  ]);
+  if (cityR.status === "fulfilled") {
+    const cur = cityR.value.filter(a => !String(a.Retire || "").trim()); // 'X' = superseded facility
+    if (cur.length) {
+      const byClass = {}, streets = [];
+      for (const a of cur) {
+        if (typeof a.Class === "number") byClass[a.Class] = (byClass[a.Class] || 0) + 1;
+        const st = a.ST_NAME && titleCase(String(a.ST_NAME).trim());
+        if (st && !streets.includes(st)) streets.push(st);
+      }
+      return { src: "lacity", count: cur.length, byClass, streets };
+    }
+  }
+  if (countyR.status === "fulfilled") {
+    const feats = countyR.value.filter(a => typeof a.class === "number" && a.class >= 1);
+    const byClass = {};
+    for (const a of feats) byClass[a.class] = (byClass[a.class] || 0) + 1;
+    return { src: "county", count: feats.length, byClass, streets: [] };
+  }
+  if (cityR.status === "fulfilled") return { src: "lacity", count: 0, byClass: {}, streets: [] };
+  throw new Error("bikeways failed");
+}
+
+function renderMove(geo, walk, transit, bikes) {
+  // 1) walkability
+  let walkBody;
+  if (!walk) walkBody = `<p class="section-sub">Couldn’t load the EPA walkability service — try the map link below.</p>`;
+  else if (walk.none) walkBody = `<p class="section-sub">No walkability score for this location (EPA scores census block groups only).</p>`;
+  else walkBody = `
+    <div class="tiles">
+      <div class="tile"><div class="label">National Walkability Index</div>
+        <div class="value">${esc(walk.ind.toFixed(1))} <small>/ 20</small></div>
+        <div class="note">${esc(walkTier(walk.ind))} — density, street connectivity &amp; transit access combined</div></div>
+    </div>
+    <p class="section-sub" style="margin-top:8px">Census block group ${esc(walk.geoid || "")} · ${walk.src === "epa" ? "current EPA release" : "older 2010-vintage mirror (EPA’s main server didn’t respond)"}</p>`;
+
+  // 2) transit
+  let transitBody;
+  if (!transit) transitBody = `<p class="section-sub">Couldn’t load the Metro stops service — check Metro’s own map below.</p>`;
+  else {
+    const radiusTxt = transit.radius === 800 ? "800 m" : "1.6 km";
+    const seen = new Set(), nearest = [];
+    for (const s of transit.stops) {
+      if (seen.has(s.name)) continue;
+      seen.add(s.name);
+      nearest.push(s);
+      if (nearest.length === 3) break;
+    }
+    transitBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">Metro stops within ${radiusTxt}</div>
+          <div class="value">${transit.stops.length}</div>
+          <div class="note">${transit.radius === 1600
+            ? (transit.stops.length ? "None within 800 m — widened to 1.6 km" : "No LA Metro stop within 1.6 km")
+            : "LA Metro bus &amp; rail (Dec 2024 network)"}</div></div>
+      </div>
+      ${nearest.length ? `<div class="schoollist">${nearest.map(s => `<div class="schoolrow"><div class="srow-top"><span class="sname">${esc(s.name)}</span><span class="sdist">${s.dist != null ? esc(distTxt(s.dist)) : ""}</span></div></div>`).join("")}</div>` : ""}
+      <p class="section-sub" style="margin-top:8px">Only LA Metro is in this dataset — municipal buses (Glendale Beeline, LADOT DASH, Big Blue Bus) aren’t shown even where they run.</p>`;
+  }
+
+  // 3) bikeways
+  let bikeBody;
+  if (!bikes) bikeBody = `<p class="section-sub">Couldn’t load the bikeway inventories.</p>`;
+  else if (!bikes.count) bikeBody = `<p class="section-sub">No existing bikeway within 500 m in the ${bikes.src === "lacity" ? "LA City" : "countywide"} inventory.</p>`;
+  else {
+    const classes = Object.keys(bikes.byClass).sort().map(c => `${esc(BIKE_CLASS[c] || "Class " + c)} ×${bikes.byClass[c]}`).join(" · ");
+    bikeBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">Bikeway segments within 500 m</div>
+          <div class="value">${bikes.count}</div>
+          <div class="note">${bikes.src === "lacity" ? "LA City DOT inventory, current facilities only" : "Metro countywide inventory (existing facilities)"}</div></div>
+      </div>
+      <p class="section-sub" style="margin-top:8px">${classes}${bikes.streets.length ? `<br>On: ${esc(bikes.streets.slice(0, 6).join(", "))}${bikes.streets.length > 6 ? "…" : ""}` : ""}</p>`;
+  }
+
+  const links = [
+    ["Walk Score for this address ↗", walkScoreUrl(geo.label), "Independent Walk/Transit/Bike scores (0–100) for the exact address"],
+    ["EPA Walkability Index map ↗", EPA_WALK_VIEWER, "Verify the federal walkability score for this block group"],
+    ["EPA Smart Location Mapping ↗", "https://www.epa.gov/smartgrowth/smart-location-mapping#walkability", "Methodology behind the 1–20 index"],
+    ["Metro schedules &amp; maps ↗", "https://www.metro.net/riding/schedules/", "Official LA Metro routes serving these stops"]
+  ];
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  $("tab-move").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Walkability</h3>
+      ${walkBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Transit stops nearby</h3>
+      ${transitBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Bikeways</h3>
+      ${bikeBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
 async function loadMove() {
   if (lazyTabs.move.loaded || !lastGeo) return;
   lazyTabs.move.loaded = true;
-  // Phase 3 (walkability, transit stops, bikeways) lands here
-  $("tab-move").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
+  const geo = lastGeo;
+  $("tab-move").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking walkability, transit stops &amp; bikeways…</span></div></div>`;
+  const [wR, tR, bR] = await Promise.allSettled([
+    walkLookup(geo.lon, geo.lat),
+    stopsLookup(geo.lon, geo.lat),
+    bikesLookup(geo.lon, geo.lat)
+  ]);
+  renderMove(geo,
+    wR.status === "fulfilled" ? (wR.value || { none: true }) : null,
+    tR.status === "fulfilled" ? tR.value : null,
+    bR.status === "fulfilled" ? bR.value : null);
 }
 
 async function loadAir() {

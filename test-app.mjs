@@ -245,6 +245,45 @@ const AADT_I5 = { features: [
 const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn
 const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd
 const OPENMETEO_OK = { latitude: 34.1, longitude: -118.3, generationtime_ms: 0.21076202392578125, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 117.0, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T12:00", interval: 3600, us_aqi: 66, pm2_5: 19.2, pm10: 23.6, ozone: 99.0, nitrogen_dioxide: 11.9 } }; // verbatim @ Tyburn
+// ===== Phase 3: Getting Around stubs (verbatim, live-captured Aug 2026) =====
+// The canonical EPA layer serves the CURRENT release (12.67 at Tyburn); the
+// AGOL mirror still hosts the older 2010-vintage index (15.167, field D4a).
+const EPA_WALK_P1 = { features: [{ attributes: { GEOID10: "060371871011", GEOID20: "060371871011", CSA_Name: "Los Angeles-Long Beach, CA", CBSA_Name: "Los Angeles-Long Beach-Anaheim, CA", TotPop: 1041, NatWalkInd: 12.666666666666668, D4A: 710.78999999999996, D3B: 80.033354266506564, D5AR: 438302, D5BR: 264822, D2A_Ranked: 12, D2B_Ranked: 12, D3B_Ranked: 12, D4A_Ranked: 14 } }] }; // verbatim @ Tyburn
+const EPA_WALK_P2 = { features: [{ attributes: { GEOID10: "060373013002", NatWalkInd: 6.4999999999999991, D4A: -99999, TotPop: 1254 } }] }; // verbatim values @ Matilija (D4A -99999 = no transit)
+const EPA_MIRROR_P1 = { features: [{ attributes: { NatWalkInd: 15.167, D4a: 537.845186794, GEOID10: "060371871011" } }] }; // verbatim mirror @ Tyburn
+const METRO_P1 = { features: [
+  { attributes: { OBJECTID: 1316, stop_id: 2209, stop_name: "Glendale / Riverside" }, geometry: { x: -118.26490599999994, y: 34.11124500000005 } },
+  { attributes: { OBJECTID: 1312, stop_id: 2205, stop_name: "Glendale / Glenhurst" }, geometry: { x: -118.26234499999998, y: 34.11630700000006 } },
+  { attributes: { OBJECTID: 6494, stop_id: 10746, stop_name: "Glendale / Glenfeliz" }, geometry: { x: -118.26296999999994, y: 34.11629400000004 } }
+]}; // verbatim @ Tyburn 800m (3 of 17)
+const METRO_GLENOAKS = { exceededTransferLimit: true, features: [
+  { attributes: { stop_id: 7680, stop_name: "Glenoaks / Sonora" }, geometry: { x: -118.28546499999999, y: 34.168412000000046 } },
+  { attributes: { stop_id: 7673, stop_name: "Glenoaks / Grandview" }, geometry: { x: -118.28110699999996, y: 34.16523200000006 } },
+  { attributes: { stop_id: 16019, stop_name: "Glenoaks / Sonora" }, geometry: { x: -118.28574799999996, y: 34.16793000000007 } }
+]}; // verbatim @ Matilija 1600m — duplicate stop name on purpose (dedupe test)
+const METRO_EMPTY = { features: [] };
+// LA City bikeways: third feature is Retire='X' (superseded) and must be filtered
+const BIKE_P1 = { features: [
+  { attributes: { OBJECTID: 30, ASSETID: 531, SECT_ID: "2362300", ST_NAME: "GRIFFITH PARK BL", ST_FROM: "LOS FELIZ BL", ST_TO: "WOOD TE", Class: 2, Bikeway: "Lane", Retire: " ", FY: "FY05/06", Year_: 2005, CD: "4", Network: "Backbone", Region: "North Central", Shape__Length: 37.26854295212677 } },
+  { attributes: { OBJECTID: 31, ASSETID: 547, SECT_ID: "2362800", ST_NAME: "GRIFFITH PARK BL", ST_FROM: "MONON ST", ST_TO: "ST GEORGE ST", Class: 2, Bikeway: "Lane", Retire: " ", FY: "FY05/06", Year_: 2005, CD: "4", Network: "Backbone", Region: "North Central", Shape__Length: 421.1920378845558 } },
+  { attributes: { OBJECTID: 32, ASSETID: 5579, SECT_ID: "2363100", ST_NAME: "GRIFFITH PARK BL", ST_FROM: "ANGUS ST", ST_TO: "TRACY ST", Class: 2, Bikeway: "Buffer Bike Lane", Retire: "X", RetireType: "BIKE LANE", Upgraded_From: "BL TO BBL", Project_Type: "UPGRADE", FY: "FY20/21", Year_: 2020, CD: "4", Shape__Length: 826.0038879114669 } }
+]}; // verbatim @ Tyburn (3 of 72)
+const BIKE_P2_COUNTY = { features: [
+  { attributes: { FID: 608, FID_bikewa: 1444, county: "Los Angeles", class: 3, name: " ", GEOID10: "06037", Caltrans_D: 7, MPOs: "SCAG", miles: 1.0783275591, ct_ver: 0, Shape__Length: 2104.4876667481735 } },
+  { attributes: { FID: 878, FID_bikewa: 1700, county: "Los Angeles", class: 3, name: " ", GEOID10: "06037", Caltrans_D: 7, MPOs: "SCAG", miles: 2.00221323872, ct_ver: 0, Shape__Length: 3897.2278165769676 } }
+]}; // verbatim Metro countywide layer @ Matilija (trimmed fields to those used)
+async function moveRoutes(page, opts = {}) {
+  await page.route("**/geodata.epa.gov/**", r => opts.epaDown ? r.abort("failed") : json(r, opts.walk || EPA_WALK_P1));
+  await page.route("**/National_Walkability_Index/**", r => json(r, EPA_MIRROR_P1));
+  await page.route("**/LACMTAstopsDEC24_view/**", r => {
+    const u = r.request().url();
+    if (opts.metroFar) return json(r, u.includes("distance=800") ? METRO_EMPTY : METRO_GLENOAKS);
+    return json(r, METRO_P1);
+  });
+  await page.route("**/LA_City_Bikeways/**", r => json(r, opts.cityBikes || BIKE_P1));
+  await page.route("**/RmCCgQtiZLDCtblq/**", r => json(r, opts.countyBikes || { features: [] }));
+}
+
 async function airRoutes(page, opts = {}) {
   await page.route("**/caltrans-gis.dot.ca.gov/**", r => {
     const u = r.request().url();
@@ -564,6 +603,122 @@ async function schoolsBaseRoutes(page) {
   check("AIR-ERR: AQ failure points at AirNow", air.includes("check AirNow"));
   check("AIR-ERR: all four source links still shown", (await page.locator("#tab-air .links a").count()) === 4);
   check("AIR-ERR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// ===================== Phase 3: Getting Around tab (stubbed) =====================
+// -- happy path @ Tyburn: walkable, 3 Metro stops, LA City bikeways --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await moveRoutes(page);
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("MOVE: tab present", await page.locator('.tab[data-tab="move"]').count() === 1);
+  check("MOVE: panel lazy (no content before click)", (await page.textContent("#tab-move")).trim() === "");
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const mv = await page.textContent("#tab-move");
+  check("MOVE: walk index 12.7 / 20 (current EPA release, not 2010 mirror)", mv.includes("12.7") && mv.includes("/ 20") && mv.includes("current EPA release"), mv.slice(0, 250));
+  check("MOVE: walk tier Above-average", mv.includes("Above-average walkable"));
+  check("MOVE: block group id shown", mv.includes("060371871011"));
+  check("MOVE: 3 Metro stops within 800 m", mv.includes("Metro stops within 800 m") && mv.includes("Dec 2024"));
+  check("MOVE: nearest stop Glendale / Riverside ~340 m first", (await page.textContent("#tab-move .schoolrow:first-child")).includes("Glendale / Riverside"), await page.textContent("#tab-move .schoolrow:first-child"));
+  check("MOVE: stop distance rendered", /3[3-5]0 m/.test(mv), mv.slice(0, 400));
+  check("MOVE: municipal-operator disclaimer (Beeline)", mv.includes("Glendale Beeline"));
+  check("MOVE: bikeways count 2 (Retire='X' row filtered)", mv.includes("Bikeway segments within 500 m") && (await page.locator('#tab-move .tile:has-text("Bikeway segments") .value').textContent()).trim() === "2");
+  check("MOVE: Class II label + street name title-cased", mv.includes("Class II bike lane ×2") && mv.includes("Griffith Park Bl"));
+  check("MOVE: LA City inventory attributed", mv.includes("LA City DOT inventory"));
+  check("MOVE: Walk Score link lowercase slug", (await page.locator('#tab-move a[href="https://www.walkscore.com/score/2968-tyburn-st-los-angeles-california-90039"]').count()) === 1);
+  check("MOVE: EPA viewer + Metro links present", (await page.locator('#tab-move a[href*="epa.maps.arcgis.com"]').count()) === 1 && (await page.locator('#tab-move a[href*="metro.net/riding/schedules"]').count()) === 1);
+  check("MOVE: no JS errors (happy path)", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-move.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- quiet address @ Matilija: below-average walk, stops only at 1.6 km, county bikeways --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("1007 Matilija Rd, Glendale, California, 91208", -118.27626, 34.177624)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  await moveRoutes(page, { walk: EPA_WALK_P2, metroFar: true, cityBikes: { features: [] }, countyBikes: BIKE_P2_COUNTY });
+  await page.goto(appUrl);
+  await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const mv = await page.textContent("#tab-move");
+  check("MOVE-P2: walk 6.5 Below-average", mv.includes("6.5") && mv.includes("Below-average walkable"));
+  check("MOVE-P2: stops widened to 1.6 km with honest note", mv.includes("Metro stops within 1.6 km") && mv.includes("None within 800 m"), mv.slice(0, 400));
+  check("MOVE-P2: duplicate stop names deduped in nearest list", (mv.match(/Glenoaks \/ Sonora/g) || []).length === 1);
+  check("MOVE-P2: county bikeways 2 × Class III shared route", mv.includes("Class III shared route ×2") && mv.includes("countywide inventory"));
+  check("MOVE-P2: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- EPA primary down → mirror fallback labeled as older vintage --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await moveRoutes(page, { epaDown: true });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const mv = await page.textContent("#tab-move");
+  check("MOVE-MIRROR: falls back to 15.2 with vintage disclaimer", mv.includes("15.2") && mv.includes("2010-vintage"), mv.slice(0, 300));
+  check("MOVE-MIRROR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- degraded path: every getting-around service dies --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await page.route("**/geodata.epa.gov/**", r => r.abort("failed"));
+  await page.route("**/National_Walkability_Index/**", r => r.abort("failed"));
+  await page.route("**/LACMTAstopsDEC24_view/**", r => r.abort("failed"));
+  await page.route("**/LA_City_Bikeways/**", r => r.abort("failed"));
+  await page.route("**/RmCCgQtiZLDCtblq/**", r => r.abort("failed"));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .card", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const mv = await page.textContent("#tab-move");
+  check("MOVE-ERR: walk, transit and bike failures all labeled", mv.includes("Couldn’t load the EPA walkability service") && mv.includes("Couldn’t load the Metro stops service") && mv.includes("Couldn’t load the bikeway inventories"), mv.slice(0, 400));
+  check("MOVE-ERR: all four source links still shown", (await page.locator("#tab-move .links a").count()) === 4);
+  check("MOVE-ERR: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

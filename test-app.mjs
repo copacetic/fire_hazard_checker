@@ -171,15 +171,16 @@ for (const [scenario, addr, colorScheme] of [
 }
 
 // ===================== Phase 1: Schools tab (stubbed) =====================
-// Verbatim-shaped NCES EDGE responses. School_Districts_Current is a composite
-// (elementary/secondary/unified layers) queried point-in-polygon; a unified
-// district returns one name. Public_School_Locations_Current is a point layer
-// queried by radius (returnGeometry=true → distance computed client-side).
-const NCES_DIST_LAUSD = { features: [{ attributes: { NAME: "Los Angeles Unified School District", GEOID: "0622710" } }] };
-const NCES_SCHOOLS_OK = { features: [
-  { attributes: { NAME: "Atwater Avenue Elementary", LEVEL: "Elementary", LCITY: "Los Angeles", ST_SCHID: "CA-1964733-6023459" }, geometry: { x: -118.2625, y: 34.1125 } },
-  { attributes: { NAME: "Irving Middle School", LEVEL: "Middle", LCITY: "Los Angeles", ST_SCHID: "CA-1964733-6023460" }, geometry: { x: -118.272, y: 34.117 } },
-  { attributes: { NAME: "John Marshall High School", LEVEL: "High", LCITY: "Los Angeles" }, geometry: { x: -118.28, y: 34.108 } }
+// VERBATIM responses captured live Aug 2026 from the NCES EDGE services.
+// School_Districts_Current is a single composite layer (0); a unified district
+// returns one feature. Public_School_Locations_Current is a point layer queried
+// by radius (returnGeometry=true → distance computed client-side). It has NO
+// school-level field and NO CA CDS code; NCESSCH/LEAID are the ids.
+const NCES_DIST_LAUSD = { features: [{ attributes: { OBJECTID: 3168, STATEFP: "06", ELSDLEA: " ", SCSDLEA: " ", UNSDLEA: "22710", SDADMLEA: " ", GEOID: "0622710", NAME: "Los Angeles Unified School District", LSAD: "00", LOGRADE: "KG", HIGRADE: "12", MTFCC: "G5420", SDTYP: " ", FUNCSTAT: "E", GEO_YEAR: "2025", SCHOOLYEAR: "2024-2025" } }] }; // verbatim @ Tyburn St
+const NCES_SCHOOLS_OK = { features: [ // verbatim @ Tyburn St (3 of 9; Alliance is a charter — different LEAID)
+  { attributes: { OBJECTID: 11221, NCESSCH: "062271003103", LEAID: "0622710", NAME: "Ivanhoe Elementary", STREET: "2828 Herkimer St.", CITY: "Los Angeles", LAT: 34.108987, LON: -118.26708, SCHOOLYEAR: "2024-2025" }, geometry: { x: -118.26707999976938, y: 34.10898699993568 } },
+  { attributes: { OBJECTID: 10993, NCESSCH: "062271002828", LEAID: "0622710", NAME: "Atwater Avenue Elementary", STREET: "3271 Silver Lake Blvd.", CITY: "Los Angeles", LAT: 34.114677, LON: -118.254097, SCHOOLYEAR: "2024-2025" }, geometry: { x: -118.25409700005922, y: 34.114677000300595 } },
+  { attributes: { OBJECTID: 6684, NCESSCH: "060169012342", LEAID: "0601690", NAME: "Alliance Leichtman-Levine Family Foundation Env Sci High", STREET: "2930 Fletcher Dr.", CITY: "Los Angeles", LAT: 34.113259, LON: -118.246685, SCHOOLYEAR: "2024-2025" }, geometry: { x: -118.24668499969924, y: 34.11325900056551 } }
 ]};
 const NCES_SCHOOLS_EMPTY = { features: [] };
 
@@ -221,15 +222,19 @@ async function schoolsBaseRoutes(page) {
 
   check("SCH: fire panel now hidden", await page.locator("#tab-fire").isHidden());
   check("SCH: district name shown (LA Unified)", sch.includes("Los Angeles Unified"));
-  check("SCH: nearby schools listed", sch.includes("Atwater Avenue Elementary") && sch.includes("John Marshall High"));
+  check("SCH: district grades & vintage shown", sch.includes("KG–12") && sch.includes("2024-2025"));
+  check("SCH: nearby schools listed", sch.includes("Atwater Avenue Elementary") && sch.includes("Ivanhoe Elementary"));
   const firstRow = await page.textContent("#tab-schools .schoolrow:first-child");
-  check("SCH: nearest school sorted first (Atwater)", firstRow.includes("Atwater"), firstRow);
+  check("SCH: nearest school sorted first (Ivanhoe ~640m)", firstRow.includes("Ivanhoe"), firstRow);
   check("SCH: three schools rendered", await page.locator("#tab-schools .schoolrow").count() === 3);
   check("SCH: distance rendered", /\d+\s?m|\d\.\d\s?km/.test(sch), sch.slice(0, 120));
+  check("SCH: street address shown", sch.includes("3271 Silver Lake Blvd."));
+  check("SCH: district school tagged with district name", (await page.locator("#tab-schools .stag:not(.other)").count()) === 2 && sch.includes("Los Angeles Unified"));
+  check("SCH: charter tagged as charter/other (Alliance)", (await page.textContent("#tab-schools .schoolrow:has-text('Alliance')")).includes("charter / other district"));
   check("SCH: LAUSD Resident School Identifier link", (await page.locator('#tab-schools a[href="https://rsi.lausd.net/"]').count()) === 1);
   check("SCH: GreatSchools verify link present", (await page.locator('#tab-schools a[href*="greatschools.org"]').count()) >= 1);
-  check("SCH: CA Dashboard link uses 14-digit CDS", (await page.locator('#tab-schools a[href*="caschooldashboard.org/reports/19647336023459"]').count()) === 1);
-  check("SCH: NCES district finder link present", (await page.locator('#tab-schools a[href*="nces.ed.gov"]').count()) === 1);
+  check("SCH: NCES per-school profile link uses NCESSCH", (await page.locator('#tab-schools a[href*="school_detail.asp?Search=1&ID=062271002828"]').count()) === 1);
+  check("SCH: NCES district finder link present", (await page.locator('#tab-schools a[href*="nces.ed.gov/ccd/schoolmap"]').count()) === 1);
 
   // switching back to Fire still works and content intact
   await page.click('.tab[data-tab="fire"]');

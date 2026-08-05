@@ -259,7 +259,7 @@
     <div class="tabs" id="tabs" role="tablist">
       <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
       <button class="tab" data-tab="schools" role="tab">Schools</button>
-      <button class="tab" data-tab="air" role="tab">Air &amp; Noise</button>
+      <button class="tab" data-tab="air" role="tab">Air &amp; Traffic</button>
     </div>
 
     <div class="tabpanel" id="tab-fire" role="tabpanel">
@@ -282,7 +282,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Traffic tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -347,6 +347,27 @@ const LAUSD_LEVELS = [
 const SABS = "https://nces.ed.gov/opengis/rest/services/K12_School_Locations/SABS_1516/MapServer/0/query";
 // the RSI app lives at this subpath — the bare rsi.lausd.net root serves a 404
 const RSI_URL = "https://rsi.lausd.net/ResidentSchoolIdentifier/";
+
+// ---- Air & Traffic (Phase 2), live-verified Aug 2026 ----
+// Caltrans GIS (keyless, CORS-open): SHN_Lines is the State Highway Network
+// centerline layer — each carriageway is a separate feature (NB/SB), so
+// dedupe on route name. Traffic_AADT is the Traffic Census count-station
+// layer — ALL its fields are strings (parseInt the AADT numbers), stations
+// also duplicate per carriageway, and there is no year field (it's the
+// latest published Traffic Census year, which runs Oct–Sep).
+const SHN = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/SHN_Lines/FeatureServer/0/query";
+const AADT = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/Traffic_AADT/FeatureServer/0/query";
+// CalEnviroScreen 4.0 tract layer — the service's only layer is /8 (CES4_final,
+// 8035 tracts). Percentiles are 0-100 doubles; unscored tracts use JSON null
+// (never -999) and individual fields can be null independently.
+const CES4 = "https://services.arcgis.com/o6oETlrWetREI1A2/ArcGIS/rest/services/CES4/FeatureServer/8/query";
+const CES_MAP = "https://experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"; // OEHHA's official CES 4.0 map
+// Open-Meteo air quality: keyless, CORS *, CC-BY 4.0 (attribution required);
+// ~10 km model grid, hourly updates.
+const OPENMETEO_AQ = "https://air-quality-api.open-meteo.com/v1/air-quality";
+// CARB Air Quality & Land Use Handbook (the 500-ft freeway advisory) — the
+// old 2021-12 URL 404s; this 2023-05 path is the live one.
+const CARB_HANDBOOK = "https://ww2.arb.ca.gov/sites/default/files/2023-05/Land%20Use%20Handbook_0.pdf";
 
 /* ================= severity model ================= */
 const SEV = {
@@ -869,11 +890,168 @@ async function loadSchools() {
     sR.status === "fulfilled" ? sR.value : null,
     assigned);
 }
+/* ================= air & traffic (Phase 2) ================= */
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+const ROUTE_PREFIX = { Interstate: "I-", State: "SR-", US: "US-" };
+
+async function highwayLookup(lon, lat) {
+  for (const d of [200, 500, 1000]) {
+    const atts = await queryZoneLayer(SHN, lon, lat, d);
+    if (atts.length) {
+      const seen = new Set(), routes = [];
+      for (const a of atts) {
+        const name = (ROUTE_PREFIX[a.RouteType] || "") + (a.RouteS || a.Route || "");
+        if (!name || seen.has(name)) continue;   // NB/SB carriageways are separate features
+        seen.add(name);
+        routes.push(name);
+      }
+      if (routes.length) return { dist: d, routes };
+    }
+  }
+  return { dist: null, routes: [] };
+}
+
+async function aadtLookup(lon, lat) {
+  const atts = await queryZoneLayer(AADT, lon, lat, 1000);
+  const seen = new Set(), stations = [];
+  for (const a of atts) {
+    const k = (a.RTE || "") + "|" + (a.PM || "") + "|" + (a.DESCRIPTION || "");
+    if (seen.has(k)) continue;                   // stations duplicate per carriageway
+    seen.add(k);
+    const back = parseInt(a.BACK_AADT, 10) || 0, ahead = parseInt(a.AHEAD_AADT, 10) || 0;
+    const aadt = Math.max(back, ahead);
+    if (!aadt) continue;
+    stations.push({ route: a.RTE ? "Route " + a.RTE : null, desc: a.DESCRIPTION ? String(a.DESCRIPTION) : null, aadt });
+  }
+  stations.sort((x, y) => y.aadt - x.aadt);
+  return stations;
+}
+
+async function cesLookup(lon, lat) {
+  const j = await getJSON(arcgisPointQuery(CES4, lon, lat, {
+    outFields: "Tract,CIscore,CIscoreP,Traffic_Pctl,Diesel_PM_Pctl,PM2_5_Pctl,Ozone_Pctl,Asthma_Pctl,County,ApproxLoc,Population"
+  }));
+  const f = (j.features || [])[0];
+  return f ? f.attributes : null;                // null = not inside a scored CA tract
+}
+
+async function aqLookup(lon, lat) {
+  const u = OPENMETEO_AQ + "?" + new URLSearchParams({
+    latitude: String(lat), longitude: String(lon),
+    current: "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
+    timezone: "America/Los_Angeles"
+  });
+  const j = await getJSON(u, 12000);
+  return j && j.current ? j.current : null;
+}
+
+function aqiCat(v) {
+  if (v <= 50)  return { st: "good",     label: "Good" };
+  if (v <= 100) return { st: "warning",  label: "Moderate" };
+  if (v <= 150) return { st: "serious",  label: "Unhealthy for sensitive groups" };
+  if (v <= 200) return { st: "critical", label: "Unhealthy" };
+  if (v <= 300) return { st: "critical", label: "Very unhealthy" };
+  return { st: "critical", label: "Hazardous" };
+}
+
+function renderAir(geo, hw, aadt, ces, aq) {
+  const distLabel = { 200: "within ~200 m", 500: "within ~500 m", 1000: "within ~1 km" };
+
+  let hwTile;
+  if (!hw) hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The Caltrans highway service didn’t respond</div></div>`;
+  else if (!hw.routes.length) hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:15px">None within 1 km</div><div class="note">No state highway, freeway or interstate within 1 km (Caltrans SHN)</div></div>`;
+  else hwTile = `<div class="tile"><div class="label">Nearest state highway</div><div class="value" style="font-size:17px">${esc(hw.routes.join(" · "))}</div><div class="note">${distLabel[hw.dist]} of this address (Caltrans SHN)</div></div>`;
+
+  let aadtTile;
+  if (!aadt) aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The Caltrans Traffic Census service didn’t respond</div></div>`;
+  else if (!aadt.length) aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value" style="font-size:15px">None within 1 km</div><div class="note">No Caltrans count station within 1 km</div></div>`;
+  else aadtTile = `<div class="tile"><div class="label">Traffic at nearest count station</div><div class="value">${aadt[0].aadt.toLocaleString()} <small>veh/day</small></div><div class="note">${esc([aadt[0].desc, aadt[0].route].filter(Boolean).join(" — "))} · latest Caltrans Traffic Census</div></div>`;
+
+  const carbBox = (hw && hw.routes.length && hw.dist <= 500)
+    ? `<div class="warnbox">A freeway or state highway is ${distLabel[hw.dist]}. CARB’s land-use guidance advises against siting new homes within 500 ft (~150 m) of a freeway — traffic pollution drops off sharply beyond that. <a href="${CARB_HANDBOOK}" target="_blank" rel="noopener">CARB handbook (PDF) ↗</a></div>`
+    : "";
+
+  const pctlTile = (label, v, note) => v == null
+    ? `<div class="tile"><div class="label">${label}</div><div class="value" style="font-size:15px">No score</div><div class="note">Not scored for this tract</div></div>`
+    : `<div class="tile"><div class="label">${label}</div><div class="value">${ordinal(Math.round(v))}</div><div class="note">${note}</div></div>`;
+  let cesBody;
+  if (!ces) cesBody = `<p class="section-sub">Couldn’t load CalEnviroScreen — check the official map below.</p>`;
+  else if (ces.none) cesBody = `<p class="section-sub">This location isn’t inside a scored CalEnviroScreen tract (only California census tracts are scored).</p>`;
+  else cesBody = `
+    <p class="section-sub">Percentile across all 8,035 California tracts — <strong>higher = more pollution-burdened</strong>.</p>
+    <div class="tiles">
+      ${pctlTile("Overall burden", ces.CIscoreP, "pollution burden + population vulnerability combined")}
+      ${pctlTile("Traffic density", ces.Traffic_Pctl, "vehicle traffic on roads near the tract")}
+      ${pctlTile("Diesel particulates", ces.Diesel_PM_Pctl, "diesel PM emissions nearby")}
+      ${pctlTile("Fine particles (PM2.5)", ces.PM2_5_Pctl, "annual fine-particle concentration")}
+    </div>
+    <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
+
+  let aqBody;
+  if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — check AirNow below.</p>`;
+  else {
+    const cat = aqiCat(aq.us_aqi);
+    const unitTile = (label, v, unit) => v == null ? "" :
+      `<div class="tile"><div class="label">${label}</div><div class="value">${esc(String(v))} <small>${unit}</small></div></div>`;
+    aqBody = `
+      <div class="tiles">
+        <div class="tile"><div class="label">US Air Quality Index</div><div class="value">${Math.round(aq.us_aqi)}</div><div class="note">${badge(cat.st, cat.label)}</div></div>
+        ${unitTile("Fine particles PM2.5", aq.pm2_5, "µg/m³")}
+        ${unitTile("Ozone", aq.ozone, "µg/m³")}
+        ${unitTile("Nitrogen dioxide", aq.nitrogen_dioxide, "µg/m³")}
+      </div>
+      <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
+  }
+
+  const links = [
+    ["AirNow Fire &amp; Smoke map at this location ↗", `https://fire.airnow.gov/?lat=${geo.lat}&lng=${geo.lon}&zoom=11`, "EPA’s official live air-quality map, centered on this address"],
+    ["CalEnviroScreen 4.0 map ↗", CES_MAP, "OEHHA’s official map — search the address to verify the tract percentiles"],
+    ["Caltrans Traffic Census ↗", "https://dot.ca.gov/programs/traffic-operations/census", "The AADT program behind the traffic-volume figure"],
+    ["CARB Air Quality &amp; Land Use Handbook (PDF) ↗", CARB_HANDBOOK, "The state guidance on siting homes near freeways (500-ft advisory)"]
+  ];
+  const linksHtml = links.map(([t, u, d]) =>
+    `<div><a href="${u}" target="_blank" rel="noopener">${t}</a><div class="ldesc">${esc(d)}</div></div>`).join("");
+
+  $("tab-air").innerHTML = `
+    <div class="card">
+      <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+      <h3 class="section">Traffic &amp; freeway exposure</h3>
+      <div class="tiles">${hwTile}${aadtTile}</div>
+      ${carbBox}
+    </div>
+    <div class="card">
+      <h3 class="section">Neighborhood pollution burden</h3>
+      ${cesBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Air quality right now</h3>
+      ${aqBody}
+    </div>
+    <div class="card">
+      <h3 class="section">Check the sources yourself</h3>
+      <div class="links">${linksHtml}</div>
+    </div>`;
+}
+
 async function loadAir() {
   if (lazyTabs.air.loaded || !lastGeo) return;
   lazyTabs.air.loaded = true;
-  // Phase 2 (freeway proximity, CalEnviroScreen, live air quality) lands here
-  $("tab-air").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
+  const geo = lastGeo;
+  $("tab-air").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking freeways, pollution burden &amp; current air quality…</span></div></div>`;
+  const [hwR, aadtR, cesR, aqR] = await Promise.allSettled([
+    highwayLookup(geo.lon, geo.lat),
+    aadtLookup(geo.lon, geo.lat),
+    cesLookup(geo.lon, geo.lat),
+    aqLookup(geo.lon, geo.lat)
+  ]);
+  renderAir(geo,
+    hwR.status === "fulfilled" ? hwR.value : null,
+    aadtR.status === "fulfilled" ? aadtR.value : null,
+    cesR.status === "fulfilled" ? (cesR.value || { none: true }) : null,
+    aqR.status === "fulfilled" ? aqR.value : null);
 }
 
 function resetTabs() {

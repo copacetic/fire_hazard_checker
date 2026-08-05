@@ -230,6 +230,36 @@ const SABS_GUSD = { displayFieldName: "SrcName", features: [
 ]};
 const NCES_DIST_GUSD = { features: [{ attributes: { OBJECTID: 3170, STATEFP: "06", ELSDLEA: " ", SCSDLEA: " ", UNSDLEA: "15240", SDADMLEA: " ", GEOID: "0615240", NAME: "Glendale Unified School District", LSAD: "00", LOGRADE: "KG", HIGRADE: "12", MTFCC: "G5420", SDTYP: " ", FUNCSTAT: "E", ALAND: 97177015, AWATER: 363797, INTPTLAT: "+34.2038347", INTPTLON: "-118.2517672", GEO_YEAR: "2025", SCHOOLYEAR: "2024-2025" } }] }; // verbatim @ Matilija Rd
 
+// ===== Phase 2: Air & Traffic stubs (verbatim, live-captured Aug 2026) =====
+// SHN returns each carriageway separately (NB+SB) — the app must dedupe to one "I-5".
+const SHN_I5 = { features: [
+  { attributes: { OBJECTID: 1593, Route: 5, RteSuffix: "", RouteS: "5", PMRouteID: "LA.005...R", County: "LA", District: 7, PMPrefix: "", bPM: 16.906, ePM: 43.101, PMSuffix: "", bPMc: "16.906", ePMc: "43.101", bOdometer: 133.303, eOdometer: 159.498, AlignCode: "Right", RouteType: "Interstate", Direction: "NB", Shape__Length: 51036.867237296035 } },
+  { attributes: { OBJECTID: 1394, Route: 5, RteSuffix: "", RouteS: "5", PMRouteID: "LA.005...L", County: "LA", District: 7, PMPrefix: "", bPM: 16.901, ePM: 43.101, PMSuffix: "", bPMc: "16.901", ePMc: "43.101", bOdometer: 133.27, eOdometer: 159.47, AlignCode: "Left", RouteType: "Interstate", Direction: "SB", Shape__Length: 50939.830705264605 } }
+]}; // verbatim SHN_Lines 500m ring @ Tyburn
+const SHN_EMPTY = { features: [] };
+// AADT fields are ALL strings, and the station duplicates per carriageway (dedupe test)
+const AADT_I5 = { features: [
+  { attributes: { OBJECTID: 12072, DISTRICT: "7", RTE: "5", RTE_SFX: null, CNTY: "LA", PM_PFX: null, PM: "23.655", PM_SFX: null, DESCRIPTION: "LOS ANGELES, GLENDALE BOULEVARD", BACK_PEAK_HOUR: "14200", BACK_PEAK_MADT: "230000", BACK_AADT: "219000", AHEAD_PEAK_HOUR: "13700", AHEAD_PEAK_MADT: "220000", AHEAD_AADT: "210000" } },
+  { attributes: { OBJECTID: 12073, DISTRICT: "7", RTE: "5", RTE_SFX: null, CNTY: "LA", PM_PFX: null, PM: "23.655", PM_SFX: null, DESCRIPTION: "LOS ANGELES, GLENDALE BOULEVARD", BACK_PEAK_HOUR: "14200", BACK_PEAK_MADT: "230000", BACK_AADT: "219000", AHEAD_PEAK_HOUR: "13700", AHEAD_PEAK_MADT: "220000", AHEAD_AADT: "210000" } }
+]}; // verbatim Traffic_AADT 500m ring @ Tyburn
+const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn
+const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd
+const OPENMETEO_OK = { latitude: 34.1, longitude: -118.3, generationtime_ms: 0.21076202392578125, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 117.0, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T12:00", interval: 3600, us_aqi: 66, pm2_5: 19.2, pm10: 23.6, ozone: 99.0, nitrogen_dioxide: 11.9 } }; // verbatim @ Tyburn
+async function airRoutes(page, opts = {}) {
+  await page.route("**/caltrans-gis.dot.ca.gov/**", r => {
+    const u = r.request().url();
+    if (u.includes("Traffic_AADT")) return json(r, opts.noHighway ? SHN_EMPTY : AADT_I5);
+    if (u.includes("SHN_Lines")) {
+      if (opts.noHighway) return json(r, SHN_EMPTY);
+      // 200m ring misses, 500m ring hits — mirrors the live Tyburn behavior
+      return json(r, u.includes("distance=200") ? SHN_EMPTY : SHN_I5);
+    }
+    return json(r, SHN_EMPTY);
+  });
+  await page.route("**/CES4/FeatureServer/**", r => json(r, opts.ces || CES_P1));
+  await page.route("**/air-quality-api.open-meteo.com/**", r => json(r, OPENMETEO_OK));
+}
+
 async function schoolsBaseRoutes(page) {
   // enough fire-side routes to render #result so the tab bar appears
   await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("2968 Tyburn St, Los Angeles, California, 90039", -118.26164, 34.11268)));
@@ -437,6 +467,103 @@ async function schoolsBaseRoutes(page) {
   check("ASG-PART: loaded level still shown (Atwater)", sch.includes("Atwater Ave El"));
   check("ASG-PART: failed levels labeled Couldn’t load (2)", (sch.match(/Couldn’t load/g) || []).length >= 2, sch.slice(0, 400));
   check("ASG-PART: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// ===================== Phase 2: Air & Traffic tab (stubbed) =====================
+// -- happy path @ Tyburn: I-5 at 500m, 219k AADT, CES P1, live AQI --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await airRoutes(page);
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("AIR: tab present", await page.locator('.tab[data-tab="air"]').count() === 1);
+  check("AIR: panel lazy (no content before click)", (await page.textContent("#tab-air")).trim() === "");
+  await page.click('.tab[data-tab="air"]');
+  await page.waitForSelector("#tab-air .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const air = await page.textContent("#tab-air");
+  check("AIR: I-5 named exactly once (NB/SB deduped)", (air.match(/I-5/g) || []).length === 1, air.slice(0, 200));
+  check("AIR: freeway distance ring shown (~500 m)", air.includes("within ~500 m"));
+  check("AIR: CARB 500-ft advisory with handbook link", air.includes("500 ft") && (await page.locator('#tab-air a[href*="Land%20Use%20Handbook_0.pdf"]').count()) === 2, "warnbox + sources card");
+  check("AIR: AADT 219,000 veh/day (string parsed, max of back/ahead)", air.includes("219,000") && air.includes("veh/day"));
+  check("AIR: AADT station deduped to one description", (air.match(/GLENDALE BOULEVARD/g) || []).length === 1);
+  check("AIR: CES overall 68th percentile", air.includes("68th"));
+  check("AIR: CES traffic 91st percentile", air.includes("91st"));
+  check("AIR: CES diesel 89th percentile", air.includes("89th"));
+  check("AIR: CES tract id + vintage shown", air.includes("6037187101") && air.includes("CalEnviroScreen 4.0"));
+  check("AIR: AQI 66 with Moderate category label", air.includes("66") && air.includes("Moderate"));
+  check("AIR: PM2.5 value with units", air.includes("19.2") && air.includes("µg/m³"));
+  check("AIR: Open-Meteo CC-BY attribution link", (await page.locator('#tab-air a[href="https://open-meteo.com/"]').count()) === 1);
+  check("AIR: AirNow link centered on this address", (await page.locator('#tab-air a[href*="fire.airnow.gov"][href*="lat=34.11268"]').count()) === 1);
+  check("AIR: CES official map verify link", (await page.locator('#tab-air a[href*="experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"]').count()) === 1);
+  check("AIR: Caltrans Traffic Census verify link", (await page.locator('#tab-air a[href*="dot.ca.gov/programs/traffic-operations/census"]').count()) === 1);
+  check("AIR: no JS errors (happy path)", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-air.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- quiet address @ Matilija: no highway or station within 1 km, CES P2 --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("1007 Matilija Rd, Glendale, California, 91208", -118.27626, 34.177624)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  await airRoutes(page, { noHighway: true, ces: CES_P2 });
+  await page.goto(appUrl);
+  await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="air"]');
+  await page.waitForSelector("#tab-air .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const air = await page.textContent("#tab-air");
+  check("AIR-P2: no highway AND no station honestly labeled", (air.match(/None within 1 km/g) || []).length === 2, air.slice(0, 300));
+  check("AIR-P2: no CARB warnbox when nothing near", !air.includes("500 ft"));
+  check("AIR-P2: CES traffic 8th percentile (quiet street)", air.includes("8th"));
+  check("AIR-P2: CES tract is the Glendale one", air.includes("6037301300") && air.includes("Glendale"));
+  check("AIR-P2: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- degraded path: every air service dies → honest labels, links intact --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await page.route("**/caltrans-gis.dot.ca.gov/**", r => r.abort("failed"));
+  await page.route("**/CES4/FeatureServer/**", r => r.abort("failed"));
+  await page.route("**/air-quality-api.open-meteo.com/**", r => r.abort("failed"));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="air"]');
+  await page.waitForSelector("#tab-air .card", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const air = await page.textContent("#tab-air");
+  check("AIR-ERR: highway + AADT tiles say Couldn’t load", (air.match(/Couldn’t load/g) || []).length >= 3, air.slice(0, 400));
+  check("AIR-ERR: CES failure points at official map", air.includes("Couldn’t load CalEnviroScreen"));
+  check("AIR-ERR: AQ failure points at AirNow", air.includes("check AirNow"));
+  check("AIR-ERR: all four source links still shown", (await page.locator("#tab-air .links a").count()) === 4);
+  check("AIR-ERR: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

@@ -260,6 +260,7 @@
       <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
       <button class="tab" data-tab="schools" role="tab">Schools</button>
       <button class="tab" data-tab="air" role="tab">Air &amp; Traffic</button>
+      <button class="tab" data-tab="move" role="tab">Getting Around</button>
     </div>
 
     <div class="tabpanel" id="tab-fire" role="tabpanel">
@@ -278,6 +279,7 @@
 
     <div class="tabpanel" id="tab-schools" role="tabpanel" hidden></div>
     <div class="tabpanel" id="tab-air" role="tabpanel" hidden></div>
+    <div class="tabpanel" id="tab-move" role="tabpanel" hidden></div>
   </div>
 
   <footer>
@@ -769,7 +771,8 @@ function assignedHtml(assigned, isLAUSD) {
 let lastGeo = null;
 const lazyTabs = {
   schools: { loaded: false, load: loadSchools },
-  air:     { loaded: false, load: loadAir }
+  air:     { loaded: false, load: loadAir },
+  move:    { loaded: false, load: loadMove }
 };
 function renderSchools(geo, district, schools, assigned) {
   const panel = $("tab-schools");
@@ -1034,6 +1037,13 @@ function renderAir(geo, hw, aadt, ces, aq) {
       <h3 class="section">Check the sources yourself</h3>
       <div class="links">${linksHtml}</div>
     </div>`;
+}
+
+async function loadMove() {
+  if (lazyTabs.move.loaded || !lastGeo) return;
+  lazyTabs.move.loaded = true;
+  // Phase 3 (walkability, transit stops, bikeways) lands here
+  $("tab-move").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
 }
 
 async function loadAir() {

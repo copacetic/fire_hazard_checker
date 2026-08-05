@@ -272,6 +272,44 @@ const BIKE_P2_COUNTY = { features: [
   { attributes: { FID: 608, FID_bikewa: 1444, county: "Los Angeles", class: 3, name: " ", GEOID10: "06037", Caltrans_D: 7, MPOs: "SCAG", miles: 1.0783275591, ct_ver: 0, Shape__Length: 2104.4876667481735 } },
   { attributes: { FID: 878, FID_bikewa: 1700, county: "Los Angeles", class: 3, name: " ", GEOID10: "06037", Caltrans_D: 7, MPOs: "SCAG", miles: 2.00221323872, ct_ver: 0, Shape__Length: 3897.2278165769676 } }
 ]}; // verbatim Metro countywide layer @ Matilija (trimmed fields to those used)
+// ===== Phase 4: Safety stubs (verbatim, live-captured Aug 2026) =====
+const JURIS_LA = { features: [{ attributes: { OBJECTID: 78, CITY: null, CITYNAME_ALF: "LOS ANGELES", SYMBOL_COLORNAME: null, COMP_NO: null, TYPE: null, ADOPTED: null, SYMBOL: 0, NAME: null, ACRES: 302875.4827502, CITY_COMM_NAME: "LOS ANGELES", ZCIP_PHASE: null, SQ_MILES: 473.2429418, JURISDICTION: "INCORPORATED CITY", Shape__Area: 13193255694.705078, Shape__Length: 1840888.8937873405 } }] }; // verbatim @ Tyburn
+const JURIS_GLND = { features: [{ attributes: { OBJECTID: 48, CITY: null, CITYNAME_ALF: "GLENDALE", SYMBOL_COLORNAME: null, COMP_NO: null, TYPE: null, ADOPTED: null, SYMBOL: 13, NAME: null, ACRES: 19585.22595395, CITY_COMM_NAME: "GLENDALE", ZCIP_PHASE: null, SQ_MILES: 30.60191555, JURISDICTION: "INCORPORATED CITY", Shape__Area: 853135855.09902382, Shape__Length: 190483.83576796195 } }] }; // verbatim @ Matilija
+const JURIS_ALTA = { features: [{ attributes: { OBJECTID: 4, CITY: null, CITYNAME_ALF: null, SYMBOL_COLORNAME: null, COMP_NO: null, TYPE: "COMMUNITY", ADOPTED: "07-10-86", SYMBOL: 83, NAME: "ALTADENA", ACRES: 5604.0629351, CITY_COMM_NAME: "ALTADENA", ZCIP_PHASE: null, SQ_MILES: 8.75634834, JURISDICTION: "UNINCORPORATED AREA", Shape__Area: 244113957.90887833, Shape__Length: 95045.302690769386 } }] }; // verbatim @ Altadena point
+// LAPD k7nn-b2ep (2026+): note space-padded area_name — verbatim quirk
+const LAPD_K7 = [
+  { caseno: "C269029264", uniquenibrno: "C269029264_290_0", date_rptd: "2026-07-11T10:56:00.000", date_occ: "2026-07-01T18:01:00.000", time_occ: "1801", area: "11", area_name: "Northeast           ", rpt_dist_no: "1132", totaloffensecount: "1", group: "A", nibr_code: "290", nibr_description: "594(B)(1) - PC - F - Vandalism ($400 Or More) - Felony - 290", crime_against: "Property", premis_cd: "44", premis_desc: "Nail Salon", status: "1", status_desc: "Open", totalvictimcount: "1", victim_shot: "No", domestic_violence_crime: "No", hate_crime: "No", gang_related_crime: "No", transit_related_crime: "No", homeless_victim_crime: "No", homeless_suspect_crime: "No", homeless_arrestee_crime: "No", hndrdth_loc_chk: "2900 Riverside Dr", hndrdth_lat: "34.1112", hndrdth_lon: "-118.2652" },
+  { caseno: "26128209", uniquenibrno: "26128209_13B_0", date_rptd: "2026-07-02T14:47:36.000", date_occ: "2026-07-01T16:40:00.000", time_occ: "1640", area: "11", area_name: "Northeast           ", rpt_dist_no: "1132", totaloffensecount: "1", group: "A", nibr_code: "13B", nibr_description: "242 - PC - M - Battery On Person - Simple - 13B", crime_against: "Person", premis_cd: "63", premis_desc: "Shelter - Mission / Homeless", weapon_used_cd: "OA", weapon_desc: "Scalding Liquid", status: "40", status_desc: "Investigation Continued", totalvictimcount: "1", victim_shot: "No", domestic_violence_crime: "No", hate_crime: "No", gang_related_crime: "No", transit_related_crime: "No", homeless_victim_crime: "No", homeless_suspect_crime: "No", homeless_arrestee_crime: "No", hndrdth_loc_chk: "3000 Riverside Dr", hndrdth_lat: "34.1119", hndrdth_lon: "-118.2664" },
+  { caseno: "26126274", uniquenibrno: "26126274_23H_0", date_rptd: "2026-06-28T20:45:33.000", date_occ: "2026-06-28T20:00:00.000", time_occ: "2000", area: "11", area_name: "Northeast           ", rpt_dist_no: "1123", totaloffensecount: "1", group: "A", nibr_code: "23H", nibr_description: "530.5(E) - PC - M - Commit Mail Theft -  All Other Larceny - 23H", crime_against: "Property", premis_cd: "34", premis_desc: "Victim's Residence", status: "1", status_desc: "Open", totalvictimcount: "1", victim_shot: "No", domestic_violence_crime: "No", hate_crime: "No", homeless_suspect_crime: "Yes", gang_related_crime: "No", transit_related_crime: "No", homeless_victim_crime: "No", homeless_arrestee_crime: "No", hndrdth_loc_chk: "3600 Glenfeliz Blvd", hndrdth_lat: "34.1162", hndrdth_lon: "-118.2629" }
+]; // verbatim near Tyburn
+// LAPD y8y3-fqfu (2024-25): same anonymized values but plain lat/lon/location
+// field names; one incident (caseno 25244102) yields two offense rows, and
+// crime_against can be compound ("Person, Property, Society")
+const LAPD_Y8 = [
+  { caseno: "25244102", uniquenibrno: "25244102_90Z_1", date_rptd: "2025-12-29T00:00:00.000", date_occ: "2025-12-29T00:00:00.000", time_occ: "1110", area: "11", area_name: "Northeast", rpt_dist_no: "1132", totaloffensecount: "2", group: "B", nibr_code: "90Z", nibr_description: "978.5 - PC - M - Bench Warrant/Failure To Appear On Misdemeanor Charge - 90Z", crime_against: "Person, Property, Society", premis_cd: "22", premis_desc: "Highway / Road / Alley / Street", status: "40", status_desc: "Investigation Continued", totalvictimcount: "0", victim_shot: "No", domestic_violence_crime: "No", hate_crime: "No", gang_related_crime: "No", transit_related_crime: "No", homeless_victim_crime: "No", homeless_suspect_crime: "No", homeless_arrestee_crime: "No", location: "3000 Riverside Dr", lat: "34.1119", lon: "-118.2664" },
+  { caseno: "25244102", uniquenibrno: "25244102_35B_0", date_rptd: "2025-12-29T00:00:00.000", date_occ: "2025-12-29T00:00:00.000", time_occ: "1110", area: "11", area_name: "Northeast", rpt_dist_no: "1132", totaloffensecount: "2", group: "A", nibr_code: "35B", nibr_description: "11364(A) - HS - M - Possess Unlawful Paraphernalia - 35B", crime_against: "Society", premis_cd: "22", premis_desc: "Highway / Road / Alley / Street", status: "40", status_desc: "Investigation Continued", totalvictimcount: "0", victim_shot: "No", domestic_violence_crime: "No", hate_crime: "No", gang_related_crime: "No", transit_related_crime: "No", homeless_victim_crime: "No", homeless_suspect_crime: "No", homeless_arrestee_crime: "No", location: "3000 Riverside Dr", lat: "34.1119", lon: "-118.2664" }
+]; // verbatim near Tyburn
+const LASD_YTD_S = { exceededTransferLimit: true, features: [
+  { attributes: { INCIDENT_DATE: 1782845940000, CATEGORY: "VEHICLE / BOATING LAWS", STAT_DESC: "VEHICLE AND BOATING LAWS: Misdemeanor", STREET: "800 E MARIPOSA ST", CITY: "ALTADENA", ZIP: null, UNIT_NAME: "ALTADENA", PART_CATEGORY: "2", INCIDENT_ID: "926-01081-0774" } },
+  { attributes: { INCIDENT_DATE: 1781737200000, CATEGORY: "LARCENY THEFT", STAT_DESC: "GRAND THEFT: From Unlocked Auto", STREET: "1000 BEVERLY WAY", CITY: "ALTADENA", ZIP: "91001", UNIT_NAME: "ALTADENA", PART_CATEGORY: "1", INCIDENT_ID: "926-01012-0775" } },
+  { attributes: { INCIDENT_DATE: 1779895800000, CATEGORY: "LARCENY THEFT", STAT_DESC: "GRAND THEFT: Other (From Boat, Plane, Prvt Res, Yard, Etc)", STREET: "1100 RUBIO ST", CITY: "ALTADENA", ZIP: "91001", UNIT_NAME: "ALTADENA", PART_CATEGORY: "1", INCIDENT_ID: "926-00881-0775" } }
+]}; // verbatim @ Altadena
+const LASD_HIST_S = { exceededTransferLimit: true, features: [
+  { attributes: { INCIDENT_DATE: 1765944000000, CATEGORY: "LARCENY THEFT", STAT_DESC: "GRAND THEFT: Auto Parts And Accessories", STREET: "2900 SANTA ROSA AVE", CITY: "ALTADENA", ZIP: "91001", UNIT_NAME: "ALTADENA", PART_CATEGORY: "1", INCIDENT_ID: "925-01992-0773" } },
+  { attributes: { INCIDENT_DATE: 1761829800000, CATEGORY: "LARCENY THEFT", STAT_DESC: "THEFT, PETTY: Shoplifting (From Dept Store, Mkt, Etc)", STREET: "2500 N LAKE AVE", CITY: "ALTADENA", ZIP: "91001", UNIT_NAME: "ALTADENA", PART_CATEGORY: "1", INCIDENT_ID: "925-01797-0775" } }
+]}; // verbatim @ Altadena
+async function safetyRoutes(page, opts = {}) {
+  await page.route("**/RmCCgQtiZLDCtblq/**", r => {
+    const u = r.request().url();
+    if (u.includes("admin_dist_SDE_DIST_DRP_CITY_COMM_BDY")) return opts.jurisDown ? r.abort("failed") : json(r, opts.juris || JURIS_LA);
+    if (u.includes("PART_I_AND_II_CRIMES-YTD")) return json(r, LASD_YTD_S);
+    if (u.includes("Historical")) return json(r, LASD_HIST_S);
+    return json(r, { features: [] });
+  });
+  await page.route("**/data.lacity.org/resource/k7nn-b2ep.json*", r => opts.lapdDown ? r.abort("failed") : json(r, LAPD_K7));
+  await page.route("**/data.lacity.org/resource/y8y3-fqfu.json*", r => opts.lapdDown ? r.abort("failed") : json(r, LAPD_Y8));
+}
+
 async function moveRoutes(page, opts = {}) {
   await page.route("**/geodata.epa.gov/**", r => opts.epaDown ? r.abort("failed") : json(r, opts.walk || EPA_WALK_P1));
   await page.route("**/National_Walkability_Index/**", r => json(r, EPA_MIRROR_P1));
@@ -719,6 +757,132 @@ async function schoolsBaseRoutes(page) {
   check("MOVE-ERR: walk, transit and bike failures all labeled", mv.includes("Couldn’t load the EPA walkability service") && mv.includes("Couldn’t load the Metro stops service") && mv.includes("Couldn’t load the bikeway inventories"), mv.slice(0, 400));
   check("MOVE-ERR: all four source links still shown", (await page.locator("#tab-move .links a").count()) === 4);
   check("MOVE-ERR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// ===================== Phase 4: Safety tab (stubbed) =====================
+// -- LA City @ Tyburn: LAPD path, both NIBRS datasets merged --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await safetyRoutes(page);
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("SAFE: tab present", await page.locator('.tab[data-tab="safety"]').count() === 1);
+  await page.click('.tab[data-tab="safety"]');
+  await page.waitForSelector("#tab-safety .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const sf = await page.textContent("#tab-safety");
+  check("SAFE: jurisdiction Los Angeles → LAPD", sf.includes("Los Angeles") && sf.includes("served by LAPD"));
+  check("SAFE: 5 offenses merged from both datasets", sf.includes("Offenses within 500 m") && (await page.locator('#tab-safety .tile:has-text("Offenses within") .value').textContent()).trim() === "5", sf.slice(0, 300));
+  check("SAFE: category buckets incl. compound crime_against", sf.includes("people ×2") && sf.includes("property ×3") && sf.includes("society ×2"), sf.slice(0, 400));
+  check("SAFE: NIBRS description cleaned", sf.includes("Vandalism ($400 Or More) - Felony") && !sf.includes("594(B)(1)"));
+  check("SAFE: hundred-block address shown", sf.includes("2900 Riverside Dr") && sf.includes("3600 Glenfeliz Blvd"));
+  check("SAFE: dates shown newest first", (await page.textContent("#tab-safety .schoolrow:first-child")).includes("2026-07-01"));
+  check("SAFE: anonymization disclaimed", sf.includes("hundred block"));
+  check("SAFE: city rates card with verified figures", sf.includes("City crime rates, 2024") && sf.includes("750") && sf.includes("2,637") && sf.includes("282") && sf.includes("1,988"));
+  check("SAFE: rates sourced to CA DOJ + Census", sf.includes("CA DOJ") && sf.includes("Census"));
+  check("SAFE: LAPD dataset links", (await page.locator('#tab-safety a[href="https://data.lacity.org/d/k7nn-b2ep"]').count()) === 1 && (await page.locator('#tab-safety a[href="https://data.lacity.org/d/y8y3-fqfu"]').count()) === 1);
+  check("SAFE: FBI CDE + OpenJustice links", (await page.locator('#tab-safety a[href="https://cde.ucr.cjis.gov/"]').count()) === 1 && (await page.locator('#tab-safety a[href="https://openjustice.doj.ca.gov/data"]').count()) === 1);
+  check("SAFE: no JS errors (LAPD path)", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-safety.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- Glendale @ Matilija: link-outs + verified response times, no fake data --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("1007 Matilija Rd, Glendale, California, 91208", -118.27626, 34.177624)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  await safetyRoutes(page, { juris: JURIS_GLND });
+  await page.goto(appUrl);
+  await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="safety"]');
+  await page.waitForSelector("#tab-safety .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const sf = await page.textContent("#tab-safety");
+  check("SAFE-GLND: jurisdiction Glendale PD", sf.includes("Glendale") && sf.includes("Glendale Police"));
+  check("SAFE-GLND: no-open-data stated honestly", sf.includes("no incident-level open data"));
+  check("SAFE-GLND: live calls-for-service link", (await page.locator(`#tab-safety a[href*="crime-prevention-crime-statistics"]`).count()) === 1);
+  check("SAFE-GLND: stats & booking logs link", (await page.locator(`#tab-safety a[href*="crime-statistics-booking-logs"]`).count()) === 1);
+  check("SAFE-GLND: CrimeMapping agency link", (await page.locator('#tab-safety a[href="https://www.crimemapping.com/map/agency/136"]').count()) === 1);
+  check("SAFE-GLND: verified response times with report years", sf.includes("5:13") && sf.includes("2:45") && sf.includes("2023") && sf.includes("2025"));
+  check("SAFE-GLND: unverifiable 5m22s figure NOT shipped", !sf.includes("5:22") && !sf.includes("5m22"));
+  check("SAFE-GLND: annual-report source links", (await page.locator('#tab-safety a[href*="issuu.com/glendalepd"]').count()) === 2);
+  check("SAFE-GLND: rates card present", sf.includes("City crime rates, 2024"));
+  check("SAFE-GLND: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- unincorporated @ Altadena: LASD path, YTD + Historical merged --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("600 W Palm St, Altadena, California, 91001", -118.13, 34.19)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, NONWILD));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_OK));
+  await safetyRoutes(page, { juris: JURIS_ALTA });
+  await page.goto(appUrl);
+  await page.fill("#addr", "600 W Palm St, Altadena, CA 91001");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="safety"]');
+  await page.waitForSelector("#tab-safety .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const sf = await page.textContent("#tab-safety");
+  check("SAFE-LASD: jurisdiction Altadena unincorporated → Sheriff", sf.includes("Altadena") && sf.includes("Unincorporated") && sf.includes("Sheriff"));
+  check("SAFE-LASD: 5 incidents merged YTD+Historical", (await page.locator('#tab-safety .tile:has-text("Incidents within") .value').textContent()).trim() === "5", sf.slice(0, 300));
+  check("SAFE-LASD: Part I/II breakdown", sf.includes("Part I (serious) ×4") && sf.includes("Part II ×1"));
+  check("SAFE-LASD: offense text title-cased", sf.includes("Grand Theft: From Unlocked Auto"));
+  check("SAFE-LASD: block-level street shown", sf.includes("1000 Beverly Way"));
+  check("SAFE-LASD: no city-rates card for unincorporated", !sf.includes("City crime rates"));
+  check("SAFE-LASD: LASD layer link", (await page.locator('#tab-safety a[href*="5e055d13feba4a7b9ee25a905a11f244"]').count()) === 1);
+  check("SAFE-LASD: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- degraded: LAPD datasets die but jurisdiction + links survive --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  await safetyRoutes(page, { lapdDown: true });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="safety"]');
+  await page.waitForSelector("#tab-safety .tile", { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const sf = await page.textContent("#tab-safety");
+  check("SAFE-ERR: jurisdiction still shown, LAPD failure honest", sf.includes("Los Angeles") && sf.includes("Couldn’t load the LAPD open-data service"), sf.slice(0, 300));
+  check("SAFE-ERR: all six source links intact", (await page.locator("#tab-safety .links a").count()) >= 6);
+  check("SAFE-ERR: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

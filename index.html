@@ -194,6 +194,13 @@
     border-radius: 999px; padding: 1px 7px; vertical-align: 1px; white-space: nowrap;
   }
   .stag.other { color: var(--text-muted); border-style: dashed; }
+  .dashpills { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
+  .dpill {
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    border: 1px solid var(--hairline); border-radius: 999px; padding: 1px 8px;
+    display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
+  }
+  .dpill .ddot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
 
   h3.section { font-size: 15.5px; margin: 0 0 4px; }
   .section-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
@@ -288,12 +295,28 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · LAPD NIBRS &amp; LASD open data, CA DOJ crime counts (Safety tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
 <script>
 "use strict";
+
+/* ================= owner config (optional keys) ================= */
+// The site is fully functional with NO keys — adding keys lights up extra
+// inline data. These key types are designed to be client-visible (they are
+// rate-limit identifiers, not secrets), but this repo is public: only use
+// keys you can rotate, and restrict them by referrer where the provider
+// offers it. Keys can also be injected without editing this file by defining
+// window.FIRE_CHECKER_KEYS = {...} in a script tag before this one.
+const CONFIG = Object.assign({
+  // Free key from walkscore.com/professional/api.php →
+  // inline Walk/Transit/Bike Score® tiles in the Getting Around tab
+  walkscoreKey: "",
+  // Free app token from data.lacity.org (Developer Settings) →
+  // higher rate limits on the LAPD crime queries in the Safety tab
+  socrataAppToken: ""
+}, window.FIRE_CHECKER_KEYS || {});
 
 /* ================= endpoints ================= */
 const FHSZ = "https://services1.arcgis.com/jUJYIo9tSA7EHvfZ/ArcGIS/rest/services/fhsz24_1/FeatureServer/0/query";
@@ -757,6 +780,41 @@ async function schoolsNearby(lon, lat) {
   return out;
 }
 
+/* ---- official CA School Dashboard ratings, baked into the repo ----
+   dashboard-ratings.json is generated from CDE's public research files by
+   scripts/build-dashboard-data.mjs (refreshed monthly by a GitHub Action):
+   r = cds14 → {indicator: color 1-5}, n = 12-digit NCES id → cds14.
+   The Dashboard API itself is CORS-locked to its own origin, so baking the
+   bulk data is the only way to render these inline from a static site.
+   window.FIRE_CHECKER_DATA overrides the fetch (used by the test harness —
+   file:// pages can't fetch local files). */
+let dashDataP = null;
+function getDashData() {
+  if (!dashDataP) {
+    dashDataP = window.FIRE_CHECKER_DATA
+      ? Promise.resolve(window.FIRE_CHECKER_DATA)
+      : location.protocol === "file:"
+      ? Promise.resolve(null) // opening index.html from disk: fetch can't read local files — degrade quietly
+      : fetch("dashboard-ratings.json").then(r => r.ok ? r.json() : null).catch(() => null);
+  }
+  return dashDataP;
+}
+const DASH_LABELS = { ela: "ELA", math: "Math", chr: "Absenteeism", su: "Suspensions", gr: "Graduation", cc: "College/Career" };
+const DASH_COLORS = { 1: ["Red", "var(--st-critical)"], 2: ["Orange", "var(--st-serious)"], 3: ["Yellow", "var(--st-warning)"], 4: ["Green", "var(--st-good)"], 5: ["Blue", "var(--accent)"] };
+function dashPills(dash, cds14) {
+  const rec = dash && dash.r && cds14 && dash.r[cds14];
+  if (!rec) return "";
+  const parts = [];
+  for (const k in DASH_LABELS) {
+    const c = DASH_COLORS[rec[k]];
+    if (c) parts.push(`<span class="dpill"><span class="ddot" style="background:${c[1]}"></span>${DASH_LABELS[k]} ${c[0]}</span>`);
+  }
+  return parts.length ? `<div class="dashpills">${parts.join("")}</div>` : "";
+}
+function dashCds(dash, ncessch) {
+  return (dash && dash.n && ncessch && dash.n[ncessch]) || null;
+}
+
 function greatSchoolsUrl(name, city) {
   // TRAP (verified Aug 2026): search.page 404s whenever the query ends with a
   // state token — "…Los Angeles CA" → 404, "…Los Angeles" → 200 with results.
@@ -832,7 +890,7 @@ async function sabsAssigned(lon, lat) {
   return { src: "sabs", levels };
 }
 
-function assignedHtml(assigned, isLAUSD) {
+function assignedHtml(assigned, isLAUSD, dash) {
   const head = `<h3 class="section" style="margin-top:18px">Assigned public schools</h3>`;
   const sub = isLAUSD
     ? `<p class="section-sub">From LAUSD’s official attendance boundaries, <strong>2019-20 school year</strong> — the latest LAUSD has published as open data. Boundaries change: confirm with LAUSD’s <a href="${RSI_URL}" target="_blank" rel="noopener">Resident School Identifier ↗</a>.</p>`
@@ -864,6 +922,7 @@ function assignedHtml(assigned, isLAUSD) {
       return `<div class="schoolrow">
         <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> ${esc(s.name)}</span>${s.grades ? `<span class="sdist">${esc(s.grades)}</span>` : ""}</div>
         ${s.multi ? `<div class="smeta">This school’s boundary differs by grade — verify with the district</div>` : ""}
+        ${dashPills(dash, s.cds ? cdsFull(s.cds) : dashCds(dash, s.ncessch))}
         <div class="slinks">${links.join("")}</div>
       </div>`;
     }).join("");
@@ -880,7 +939,7 @@ const lazyTabs = {
   safety:  { loaded: false, load: loadSafety },
   people:  { loaded: false, load: loadPeople }
 };
-function renderSchools(geo, district, schools, assigned) {
+function renderSchools(geo, district, schools, assigned, dash) {
   const panel = $("tab-schools");
   const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
 
@@ -904,7 +963,7 @@ function renderSchools(geo, district, schools, assigned) {
   }
 
   // 2) assigned schools (attendance boundaries — the schools this home is zoned for)
-  const asgHtml = assignedHtml(assigned, isLAUSD);
+  const asgHtml = assignedHtml(assigned, isLAUSD, dash);
 
   // 3) nearby schools table
   let nearbyHtml;
@@ -925,11 +984,12 @@ function renderSchools(geo, district, schools, assigned) {
       return `<div class="schoolrow">
         <div class="srow-top"><span class="sname">${esc(s.name)} ${tag}</span><span class="sdist">${s.dist != null ? esc(distTxt(s.dist)) : ""}</span></div>
         ${meta ? `<div class="smeta">${meta}</div>` : ""}
+        ${dashPills(dash, dashCds(dash, s.ncessch))}
         <div class="slinks">${links.join("")}</div>
       </div>`;
     }).join("");
     nearbyHtml = `<h3 class="section" style="margin-top:18px">Public schools within ~1 mile</h3>
-      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.</p>
+      <p class="section-sub">Nearest public schools (NCES locations). Proximity is not the same as assignment — attendance boundaries decide which school a home is zoned for; use the district tools below to confirm.${dash ? ` Colored pills are the school’s official <strong>CA School Dashboard ${esc(String((dash.years && dash.years.ela) || ""))}</strong> ratings (Red = lowest … Blue = highest); schools without pills have no published rating.` : ""}</p>
       <div class="schoollist">${rows}</div>
       ${schools.length > 10 ? `<p class="section-sub" style="margin-top:8px">+ ${schools.length - 10} more within a mile</p>` : ""}`;
   } else if (schools) {
@@ -984,11 +1044,13 @@ async function loadSchools() {
   lazyTabs.schools.loaded = true;
   const geo = lastGeo;
   $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up district, assigned schools &amp; nearby schools…</span></div></div>`;
-  const [dR, sR] = await Promise.allSettled([
+  const [dR, sR, dashR] = await Promise.allSettled([
     districtLookup(geo.lon, geo.lat),
-    schoolsNearby(geo.lon, geo.lat)
+    schoolsNearby(geo.lon, geo.lat),
+    getDashData()
   ]);
   if (geo !== lastGeo) return; // a new search started — never render stale data
+  const dash = dashR.status === "fulfilled" ? dashR.value : null;
   const district = dR.status === "fulfilled" ? dR.value : null;
   // which attendance-boundary source applies depends on the district result,
   // so this second hop is sequential by design
@@ -999,7 +1061,7 @@ async function loadSchools() {
   if (geo !== lastGeo) return;
   renderSchools(geo, district,
     sR.status === "fulfilled" ? sR.value : null,
-    assigned);
+    assigned, dash);
 }
 /* ================= air & traffic (Phase 2) ================= */
 function ordinal(n) {
@@ -1332,10 +1394,14 @@ async function jurisdictionLookup(lon, lat) {
 async function lapdLookup(lon, lat) {
   const cutoff = isoDaysAgo(365) + "T00:00:00";
   const dLat = 500 / 111320, dLon = 500 / (111320 * Math.cos(lat * Math.PI / 180));
-  const q = (base, latF, lonF) => getJSON(base + "?" + new URLSearchParams({
-    "$where": `${latF} between ${lat - dLat} and ${lat + dLat} AND ${lonF} between ${lon - dLon} and ${lon + dLon} AND date_occ >= '${cutoff}'`,
-    "$order": "date_occ DESC", "$limit": "500"
-  }));
+  const q = (base, latF, lonF) => {
+    const p = {
+      "$where": `${latF} between ${lat - dLat} and ${lat + dLat} AND ${lonF} between ${lon - dLon} and ${lon + dLon} AND date_occ >= '${cutoff}'`,
+      "$order": "date_occ DESC", "$limit": "500"
+    };
+    if (CONFIG.socrataAppToken) p["$$app_token"] = CONFIG.socrataAppToken;
+    return getJSON(base + "?" + new URLSearchParams(p));
+  };
   const settled = await Promise.allSettled([
     q(LAPD_2026, "hndrdth_lat", "hndrdth_lon"),
     q(LAPD_2425, "lat", "lon")
@@ -1542,6 +1608,25 @@ function titleCase(s) {
   return String(s).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
 }
 
+// Walk Score® API has no CORS but supports JSONP — usable from a static page.
+// Only called when the owner configured CONFIG.walkscoreKey.
+function walkScoreFetch(lon, lat, label) {
+  return new Promise((resolve, reject) => {
+    const cb = "__ws_cb_" + Math.random().toString(36).slice(2);
+    const s = document.createElement("script");
+    const done = (fn, v) => { clearTimeout(t); delete window[cb]; s.remove(); fn(v); };
+    const t = setTimeout(() => done(reject, new Error("walkscore timeout")), 10000);
+    window[cb] = j => done(resolve, j);
+    s.onerror = () => done(reject, new Error("walkscore failed"));
+    s.src = "https://api.walkscore.com/score?" + new URLSearchParams({
+      format: "jsonp", callback: cb, transit: "1", bike: "1",
+      address: label || "", lat: String(lat), lon: String(lon),
+      wsapikey: CONFIG.walkscoreKey
+    });
+    document.head.appendChild(s);
+  });
+}
+
 async function walkLookup(lon, lat) {
   try {
     const j = await getJSON(arcgisPointQuery(EPA_WALK, lon, lat, { outFields: "NatWalkInd,D4A,GEOID10,TotPop" }));
@@ -1609,7 +1694,7 @@ async function bikesLookup(lon, lat) {
   throw new Error("bikeways failed");
 }
 
-function renderMove(geo, walk, transit, bikes) {
+function renderMove(geo, walk, transit, bikes, ws) {
   // 1) walkability
   let walkBody;
   if (!walk) walkBody = `<p class="section-sub">Couldn’t load the EPA walkability service — try the map link below.</p>`;
@@ -1621,6 +1706,24 @@ function renderMove(geo, walk, transit, bikes) {
         <div class="note">${esc(walkTier(walk.ind))} — density, street connectivity &amp; transit access combined</div></div>
     </div>
     <p class="section-sub" style="margin-top:8px">Census block group ${esc(walk.geoid || "")} · ${walk.src === "epa" ? "current EPA release" : "older 2010-vintage mirror (EPA’s main server didn’t respond)"}</p>`;
+
+  // Walk Score® tiles — only when the owner configured an API key
+  // (ws === undefined: no key, skip silently; null: request failed)
+  let wsBody = "";
+  if (ws === null) wsBody = `<p class="section-sub">Couldn’t load Walk Score — try the link below.</p>`;
+  else if (ws && ws.status === 1) {
+    const wsTile = (label, v, descr) => v == null ? "" :
+      `<div class="tile"><div class="label">${label}</div><div class="value">${esc(String(v))} <small>/ 100</small></div>${descr ? `<div class="note">${esc(descr)}</div>` : ""}</div>`;
+    wsBody = `
+      <div class="tiles" style="margin-top:10px">
+        ${wsTile("Walk Score®", ws.walkscore, ws.description)}
+        ${wsTile("Transit Score®", ws.transit && ws.transit.score, ws.transit && ws.transit.description)}
+        ${wsTile("Bike Score®", ws.bike && ws.bike.score, ws.bike && ws.bike.description)}
+      </div>
+      <p class="section-sub" style="margin-top:8px"><a href="${ws.ws_link || walkScoreUrl(geo.label)}" target="_blank" rel="noopener">Walk Score ↗</a> — scores by walkscore.com for the exact address</p>`;
+  } else if (ws) {
+    wsBody = `<p class="section-sub">Walk Score didn’t return a score for this address (status ${esc(String(ws.status))}).</p>`;
+  }
 
   // 2) transit
   let transitBody;
@@ -1675,6 +1778,7 @@ function renderMove(geo, walk, transit, bikes) {
       <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
       <h3 class="section">Walkability</h3>
       ${walkBody}
+      ${wsBody}
     </div>
     <div class="card">
       <h3 class="section">Transit stops nearby</h3>
@@ -1695,16 +1799,18 @@ async function loadMove() {
   lazyTabs.move.loaded = true;
   const geo = lastGeo;
   $("tab-move").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking walkability, transit stops &amp; bikeways…</span></div></div>`;
-  const [wR, tR, bR] = await Promise.allSettled([
+  const [wR, tR, bR, wsR] = await Promise.allSettled([
     walkLookup(geo.lon, geo.lat),
     stopsLookup(geo.lon, geo.lat),
-    bikesLookup(geo.lon, geo.lat)
+    bikesLookup(geo.lon, geo.lat),
+    CONFIG.walkscoreKey ? walkScoreFetch(geo.lon, geo.lat, geo.label) : Promise.resolve(undefined)
   ]);
   if (geo !== lastGeo) return; // a new search started — never render stale data
   renderMove(geo,
     wR.status === "fulfilled" ? (wR.value || { none: true }) : null,
     tR.status === "fulfilled" ? tR.value : null,
-    bR.status === "fulfilled" ? bR.value : null);
+    bR.status === "fulfilled" ? bR.value : null,
+    wsR.status === "fulfilled" ? wsR.value : null);
 }
 
 async function loadAir() {

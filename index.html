@@ -280,7 +280,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations (Schools tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 (Schools tab). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -318,6 +318,33 @@ const NOMINATIM = "https://nominatim.openstreetmap.org/search";
 // and CA Dashboard per-school links can't be built from this layer.
 const NCES_DISTRICTS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/School_Districts_Current/FeatureServer/0/query";
 const NCES_SCHOOLS = "https://services1.arcgis.com/Ua5sjt3LWTPigjyD/arcgis/rest/services/Public_School_Locations_Current/FeatureServer/0/query";
+
+// ---- Assigned schools (Phase 1b), live-verified Aug 2026 ----
+// LAUSD: LA GeoHub "LAUSD_Schools" MapServer — attendance boundary polygon
+// layers 4 (elementary) / 5 (middle) / 6 (high), 2019-20 school year (the
+// latest LAUSD has published as open data). The polygons carry ONLY a keycode
+// (EKEY_5/MKEY_5/HKEY_5) — school names live in companion keycode TABLES on
+// services5.arcgis.com (note LA's inconsistent "Keycodes"/"Key_Codes" naming).
+// One keycode can resolve to several school rows (magnet centers/dual-language
+// schools share a boundary). Table field CDS is the school's 7-digit CA school
+// code (occasionally null) → "1964733" + CDS = the 14-digit CDS code used by
+// CA Dashboard & CDE Directory per-school pages (both URL patterns verified).
+// Everywhere else: NCES EDGE School Attendance Boundaries Survey 2015-16 —
+// the most recent national survey (since discontinued). openEnroll='1' rows
+// are district-wide open-enrollment polygons, not attendance zones → filtered.
+// SABS's LAUSD coverage is broken (no comprehensive high-school zones), which
+// is why LAUSD routes to the GeoHub layers instead.
+const LAUSD_GEOID = "0622710";
+const LAUSD_BND = "https://maps.lacity.org/lahub/rest/services/LAUSD_Schools/MapServer/";
+const LAUSD_TBL = "https://services5.arcgis.com/7nsPwEMP38bSkCjy/arcgis/rest/services/";
+const LAUSD_LEVELS = [
+  { level: "Elementary", boundary: LAUSD_BND + "4/query", key: "EKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Keycodes_(Elementary_Schools)/FeatureServer/0/query" },
+  { level: "Middle",     boundary: LAUSD_BND + "5/query", key: "MKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Key_Codes_(Middle_Schools)/FeatureServer/0/query" },
+  { level: "High",       boundary: LAUSD_BND + "6/query", key: "HKEY_5", table: LAUSD_TBL + "LAUSD_Attendance_Boundary_Key_Codes_(High_Schools)/FeatureServer/0/query" }
+];
+const SABS = "https://nces.ed.gov/opengis/rest/services/K12_School_Locations/SABS_1516/MapServer/0/query";
+// the RSI app lives at this subpath — the bare rsi.lausd.net root serves a 404
+const RSI_URL = "https://rsi.lausd.net/ResidentSchoolIdentifier/";
 
 /* ================= severity model ================= */
 const SEV = {
@@ -609,10 +636,116 @@ function greatSchoolsUrl(name, city) {
   return "https://www.greatschools.org/search/search.page?q=" + q;
 }
 
+/* ---- assigned schools ---- */
+// LAUSD keycode tables store the 7-digit CA school code; county 19 + district
+// 64733 prefix makes the 14-digit CDS that Dashboard/CDE pages key on
+function cdsFull(cds7) { return "1964733" + cds7; }
+async function lausdAssigned(lon, lat) {
+  const settled = await Promise.allSettled(LAUSD_LEVELS.map(async lv => {
+    const polys = await queryZoneLayer(lv.boundary, lon, lat);
+    const key = polys.length ? polys[0][lv.key] : null;
+    if (key == null) return { level: lv.level, schools: [] };
+    const j = await getJSON(lv.table + "?" + new URLSearchParams({ where: lv.key + "=" + Number(key), outFields: "*", f: "json" }));
+    const schools = (j.features || []).map(f => f.attributes || {}).filter(a => a.NAME).map(a => ({
+      name: String(a.NAME),
+      // CONFIG is display-ready ("K- 6", "9-12"); grade ints (0 = K) are the fallback
+      grades: a.CONFIG ? String(a.CONFIG).replace(/\s+/g, "").replace("-", "–")
+        : (a.LO_GRD != null && a.HI_GRD != null ? (a.LO_GRD <= 0 ? "K" : a.LO_GRD) + "–" + a.HI_GRD : null),
+      span: (typeof a.HI_GRD === "number" && typeof a.LO_GRD === "number") ? a.HI_GRD - a.LO_GRD : -1,
+      // CDS is an int in the ES table, a string in MS/HS, null for some centers
+      cds: (a.CDS != null && String(a.CDS).trim()) ? String(a.CDS).trim().padStart(7, "0") : null
+    }));
+    schools.sort((x, y) => y.span - x.span); // full-range school before shared-boundary centers
+    return { level: lv.level, schools };
+  }));
+  if (settled.every(s => s.status === "rejected")) throw new Error("assigned lookup failed");
+  return { src: "lausd", levels: settled.map((s, i) =>
+    s.status === "fulfilled" ? s.value : { level: LAUSD_LEVELS[i].level, schools: null }) };
+}
+
+const SABS_LEVELS = { "1": "Elementary", "2": "Middle", "3": "High", "4": "Other" };
+function sabsGrade(g) {
+  if (!g || g === "N") return null;
+  if (g === "KG") return "K";
+  if (g === "PK") return "PreK";
+  return String(parseInt(g, 10) || g);
+}
+async function sabsAssigned(lon, lat) {
+  const u = SABS + "?" + new URLSearchParams({
+    geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
+    spatialRel: "esriSpatialRelIntersects", where: "openEnroll='0'",
+    outFields: "schnam,SrcName,ncessch,leaid,gslo,gshi,level,openEnroll,MultiBdy",
+    returnGeometry: "false", f: "json"
+  });
+  const j = await getJSON(u);
+  const found = [];
+  for (const f of (j.features || [])) {
+    const a = f.attributes || {};
+    if (String(a.openEnroll) !== "0") continue;            // open-enrollment coverage polygon, not a zone
+    const lvlName = SABS_LEVELS[String(a.level)];
+    if (!lvlName) continue;                                // level "N" = preschool/special-ed polygons
+    const name = (a.schnam && String(a.schnam).trim()) || (a.SrcName && String(a.SrcName).trim());
+    if (!name) continue;
+    const lo = sabsGrade(a.gslo), hi = sabsGrade(a.gshi);
+    found.push({
+      order: +a.level, name,
+      ncessch: a.ncessch ? String(a.ncessch) : null,
+      grades: (lo && hi) ? lo + "–" + hi : null,
+      multi: String(a.MultiBdy) === "1"
+    });
+  }
+  const levels = [];
+  for (const code of ["1", "2", "3", "4"]) {
+    const schools = found.filter(s => s.order === +code);
+    if (code === "4" && !schools.length) continue;         // "Other" only when present
+    levels.push({ level: SABS_LEVELS[code], schools });
+  }
+  return { src: "sabs", levels };
+}
+
+function assignedHtml(assigned, isLAUSD) {
+  const head = `<h3 class="section" style="margin-top:18px">Assigned public schools</h3>`;
+  const sub = isLAUSD
+    ? `<p class="section-sub">From LAUSD’s official attendance boundaries, <strong>2019-20 school year</strong> — the latest LAUSD has published as open data. Boundaries change: confirm with LAUSD’s <a href="${RSI_URL}" target="_blank" rel="noopener">Resident School Identifier ↗</a>.</p>`
+    : `<p class="section-sub">From the federal School Attendance Boundaries Survey, <strong>2015-16</strong> — the most recent national collection, so boundaries may have changed since. Always confirm with the district.</p>`;
+  if (!assigned) {
+    return head + sub + `<p class="section-sub">Couldn’t load attendance-boundary data — use the district tools below instead.</p>`;
+  }
+  const levels = assigned.levels || [];
+  if (levels.length && levels.every(l => Array.isArray(l.schools) && !l.schools.length)) {
+    return head + sub + `<p class="section-sub">${assigned.src === "sabs"
+      ? "No attendance boundary contains this address in the 2015-16 survey — the district may not have participated. Use the finder links below."
+      : "No LAUSD attendance boundary contains this address — confirm with the Resident School Identifier."}</p>`;
+  }
+  const rows = levels.map(l => {
+    if (l.schools === null) return `<div class="schoolrow">
+      <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> Couldn’t load</span></div>
+      <div class="smeta">The boundary service didn’t respond for this level</div></div>`;
+    if (!l.schools.length) return `<div class="schoolrow">
+      <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> Not determined</span></div>
+      <div class="smeta">No boundary for this level here — confirm with the district</div></div>`;
+    return l.schools.map(s => {
+      const links = [];
+      if (s.cds) {
+        links.push(`<a href="https://www.caschooldashboard.org/reports/${esc(cdsFull(s.cds))}" target="_blank" rel="noopener">CA Dashboard ↗</a>`);
+        links.push(`<a href="https://www.cde.ca.gov/SchoolDirectory/details?cdscode=${esc(cdsFull(s.cds))}" target="_blank" rel="noopener">CDE profile ↗</a>`);
+      }
+      if (s.ncessch) links.push(`<a href="https://nces.ed.gov/ccd/schoolsearch/school_detail.asp?Search=1&ID=${esc(s.ncessch)}" target="_blank" rel="noopener">NCES profile ↗</a>`);
+      links.push(`<a href="${greatSchoolsUrl(s.name, assigned.src === "lausd" ? "Los Angeles" : null)}" target="_blank" rel="noopener">GreatSchools ↗</a>`);
+      return `<div class="schoolrow">
+        <div class="srow-top"><span class="sname"><span class="stag">${esc(l.level)}</span> ${esc(s.name)}</span>${s.grades ? `<span class="sdist">${esc(s.grades)}</span>` : ""}</div>
+        ${s.multi ? `<div class="smeta">This school’s boundary differs by grade — verify with the district</div>` : ""}
+        <div class="slinks">${links.join("")}</div>
+      </div>`;
+    }).join("");
+  }).join("");
+  return head + sub + `<div class="schoollist" id="asglist">${rows}</div>`;
+}
+
 let schoolsLoaded = false, lastGeo = null;
-function renderSchools(geo, district, schools) {
+function renderSchools(geo, district, schools, assigned) {
   const panel = $("tab-schools");
-  const isLAUSD = district && district.some(d => /los angeles unified/i.test(d.name));
+  const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
 
   // 1) district block
   let distHtml;
@@ -633,7 +766,10 @@ function renderSchools(geo, district, schools) {
       <div class="note">The NCES district service didn’t respond — use the finder link below</div></div>`;
   }
 
-  // 2) nearby schools table
+  // 2) assigned schools (attendance boundaries — the schools this home is zoned for)
+  const asgHtml = assignedHtml(assigned, isLAUSD);
+
+  // 3) nearby schools table
   let nearbyHtml;
   if (schools && schools.length) {
     const districtIds = new Set((district || []).map(d => d.geoid).filter(Boolean));
@@ -667,10 +803,10 @@ function renderSchools(geo, district, schools) {
       <p class="section-sub">Couldn’t load the NCES school-locations service — try the finder links below.</p>`;
   }
 
-  // 3) authoritative link-outs (always shown — these are the definitive tools)
+  // 4) authoritative link-outs (always shown — these are the definitive tools)
   const links = [];
   if (isLAUSD) links.push([
-    "LAUSD Resident School Identifier ↗", "https://rsi.lausd.net/",
+    "LAUSD Resident School Identifier ↗", RSI_URL,
     "LA Unified’s official tool — enter the address for its exact assigned elementary, middle & high schools"
   ]);
   links.push([
@@ -696,6 +832,7 @@ function renderSchools(geo, district, schools) {
     <div class="card">
       <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
       <div class="tiles">${distHtml}</div>
+      ${asgHtml}
       ${nearbyHtml}
     </div>
     <div class="card">
@@ -709,14 +846,21 @@ async function loadSchools() {
   if (schoolsLoaded || !lastGeo) return;
   schoolsLoaded = true;
   const geo = lastGeo;
-  $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up school district &amp; nearby schools…</span></div></div>`;
+  $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up district, assigned schools &amp; nearby schools…</span></div></div>`;
   const [dR, sR] = await Promise.allSettled([
     districtLookup(geo.lon, geo.lat),
     schoolsNearby(geo.lon, geo.lat)
   ]);
-  renderSchools(geo,
-    dR.status === "fulfilled" ? dR.value : null,
-    sR.status === "fulfilled" ? sR.value : null);
+  const district = dR.status === "fulfilled" ? dR.value : null;
+  // which attendance-boundary source applies depends on the district result,
+  // so this second hop is sequential by design
+  const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
+  let assigned = null;
+  try { assigned = await (isLAUSD ? lausdAssigned(geo.lon, geo.lat) : sabsAssigned(geo.lon, geo.lat)); }
+  catch (e) { /* assigned stays null → honest "couldn't load" label */ }
+  renderSchools(geo, district,
+    sR.status === "fulfilled" ? sR.value : null,
+    assigned);
 }
 function resetTabs() {
   schoolsLoaded = false;

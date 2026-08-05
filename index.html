@@ -257,15 +257,15 @@
 
   <div id="result">
     <div class="tabs" id="tabs" role="tablist">
-      <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
-      <button class="tab" data-tab="schools" role="tab">Schools</button>
-      <button class="tab" data-tab="air" role="tab">Air &amp; Noise</button>
-      <button class="tab" data-tab="move" role="tab">Getting Around</button>
-      <button class="tab" data-tab="safety" role="tab">Safety</button>
-      <button class="tab" data-tab="people" role="tab">People</button>
+      <button class="tab active" data-tab="fire" id="tabbtn-fire" role="tab" aria-selected="true" aria-controls="tab-fire">Fire &amp; Insurance</button>
+      <button class="tab" data-tab="schools" id="tabbtn-schools" role="tab" aria-selected="false" aria-controls="tab-schools">Schools</button>
+      <button class="tab" data-tab="air" id="tabbtn-air" role="tab" aria-selected="false" aria-controls="tab-air">Air &amp; Noise</button>
+      <button class="tab" data-tab="move" id="tabbtn-move" role="tab" aria-selected="false" aria-controls="tab-move">Getting Around</button>
+      <button class="tab" data-tab="safety" id="tabbtn-safety" role="tab" aria-selected="false" aria-controls="tab-safety">Safety</button>
+      <button class="tab" data-tab="people" id="tabbtn-people" role="tab" aria-selected="false" aria-controls="tab-people">People</button>
     </div>
 
-    <div class="tabpanel" id="tab-fire" role="tabpanel">
+    <div class="tabpanel" id="tab-fire" role="tabpanel" aria-labelledby="tabbtn-fire">
       <div class="card" id="verdict-card"></div>
       <div class="card" id="fires-card" style="display:none"></div>
       <div class="card">
@@ -279,11 +279,11 @@
       </div>
     </div>
 
-    <div class="tabpanel" id="tab-schools" role="tabpanel" hidden></div>
-    <div class="tabpanel" id="tab-air" role="tabpanel" hidden></div>
-    <div class="tabpanel" id="tab-move" role="tabpanel" hidden></div>
-    <div class="tabpanel" id="tab-safety" role="tabpanel" hidden></div>
-    <div class="tabpanel" id="tab-people" role="tabpanel" hidden></div>
+    <div class="tabpanel" id="tab-schools" role="tabpanel" aria-labelledby="tabbtn-schools" hidden></div>
+    <div class="tabpanel" id="tab-air" role="tabpanel" aria-labelledby="tabbtn-air" hidden></div>
+    <div class="tabpanel" id="tab-move" role="tabpanel" aria-labelledby="tabbtn-move" hidden></div>
+    <div class="tabpanel" id="tab-safety" role="tabpanel" aria-labelledby="tabbtn-safety" hidden></div>
+    <div class="tabpanel" id="tab-people" role="tabpanel" aria-labelledby="tabbtn-people" hidden></div>
   </div>
 
   <footer>
@@ -598,9 +598,11 @@ async function geocode(q) {
   const m = query.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*,\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
   if (m) return { lat: +m[1], lon: +m[2], label: "Coordinates " + m[1] + ", " + m[2], src: "coords" };
   // bare street address with no city → assume Glendale (this tool's home turf);
-  // has a city but no state → assume California
-  if (!/ca\b|california/i.test(query)) query += query.includes(",") ? ", CA" : ", Glendale, CA";
-  let netFails = 0;
+  // has a city but no state → assume California. Leading \b matters: without
+  // it, street names ending in "ca" (Seneca, Ithaca…) matched and the
+  // city/state suffix was silently skipped.
+  if (!/\bca\b|california/i.test(query)) query += query.includes(",") ? ", CA" : ", Glendale, CA";
+  let netFails = 0, fails = 0;
 
   // 1) Esri World Geocoder — best coverage AND the same CORS-open ArcGIS
   //    infrastructure as the hazard layers
@@ -609,16 +611,18 @@ async function geocode(q) {
     const j = await getJSON(u, 10000);
     const c = j && j.candidates && j.candidates[0];
     if (c && c.score >= 80 && c.location) return { lat: c.location.y, lon: c.location.x, label: c.address, src: "esri" };
-  } catch (e) { if (isNetErr(e)) netFails++; }
+  } catch (e) { fails++; if (isNetErr(e)) netFails++; }
 
   // 2) Nominatim / OpenStreetMap fallback
   try {
     const u2 = NOMINATIM + "?" + new URLSearchParams({ format: "jsonv2", limit: "1", countrycodes: "us", q: query });
     const j2 = await getJSON(u2, 12000);
     if (Array.isArray(j2) && j2.length) return { lat: +j2[0].lat, lon: +j2[0].lon, label: j2[0].display_name, src: "osm" };
-  } catch (e) { if (isNetErr(e)) netFails++; }
-  // both threw network errors (never got a response) → something is blocking requests
-  throw new Error(netFails >= 2 ? "blocked" : "no-match");
+  } catch (e) { fails++; if (isNetErr(e)) netFails++; }
+  // both died at network level → something is blocking requests; both errored
+  // (e.g. HTTP 5xx) → the services are down, the address was never evaluated
+  if (netFails >= 2) throw new Error("blocked");
+  throw new Error(fails >= 2 ? "geo-down" : "no-match");
 }
 
 function zoneClass(a) {
@@ -640,23 +644,26 @@ async function fhszLookup(lon, lat) {
   // query the statewide layer AND all four official LRA-2025 phase layers; most severe wins
   const settled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat)));
   if (settled.every(s => s.status === "rejected")) throw new Error("all zone layers failed");
+  // some layers failing while others answer must NOT read as a confident
+  // "no zone" — LA City's zones exist only in the phase layers, so a partial
+  // outage could otherwise hide a Very High zone entirely
+  let partial = settled.some(s => s.status === "rejected");
   // NOTE: the official layers also contain non-zone polygons (e.g. "NonWildland",
   // FHSZ = -3) — only codes 1/2/3 are designated hazard zones.
   let best = null;
   for (const s of settled) if (s.status === "fulfilled")
     for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!best || a.FHSZ > best.FHSZ)) best = a;
-  if (best) return { inZone: true, code: best.FHSZ, desc: best.FHSZ_Description || best.FHSZ_Descr, area: best.SRA, cls: zoneClass(best) };
+  if (best) return { inZone: true, code: best.FHSZ, desc: best.FHSZ_Description || best.FHSZ_Descr, area: best.SRA, cls: zoneClass(best), partial };
   // not in a zone — find nearest designated zone in expanding rings (across all layers)
   for (const d of [250, 1000, 3000]) {
-    try {
-      const ringSettled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat, d)));
-      let worst = null;
-      for (const s of ringSettled) if (s.status === "fulfilled")
-        for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!worst || a.FHSZ > worst.FHSZ)) worst = a;
-      if (worst) return { inZone: false, code: 0, nearest: { dist: d, code: worst.FHSZ, cls: zoneClass(worst) } };
-    } catch (e) { break; }
+    const ringSettled = await Promise.allSettled(layers.map(u => queryZoneLayer(u, lon, lat, d)));
+    partial = partial || ringSettled.some(s => s.status === "rejected");
+    let worst = null;
+    for (const s of ringSettled) if (s.status === "fulfilled")
+      for (const a of s.value) if (typeof a.FHSZ === "number" && a.FHSZ >= 1 && (!worst || a.FHSZ > worst.FHSZ)) worst = a;
+    if (worst) return { inZone: false, code: 0, nearest: { dist: d, code: worst.FHSZ, cls: zoneClass(worst) }, partial };
   }
-  return { inZone: false, code: 0, nearest: null };
+  return { inZone: false, code: 0, nearest: null, partial };
 }
 
 async function nriLookup(lon, lat) {
@@ -670,18 +677,22 @@ async function firesLookup(lon, lat) {
     geometry: lon + "," + lat, geometryType: "esriGeometryPoint", inSR: "4326",
     distance: "5000", units: "esriSRUnit_Meter",
     where: "YEAR_>=2005",
-    outFields: "FIRE_NAME,YEAR_,GIS_ACRES,ALARM_DATE",
+    outFields: "OBJECTID,FIRE_NAME,YEAR_,GIS_ACRES,ALARM_DATE",
     orderByFields: "YEAR_ DESC,GIS_ACRES DESC",
     returnGeometry: "false", resultRecordCount: "40", f: "json"
   });
   const j = await getJSON(u);
   const seen = new Set(), out = [];
   for (const f of (j.features || [])) {
-    const a = f.attributes, k = (a.FIRE_NAME || "?") + "|" + a.YEAR_;
+    const a = f.attributes;
+    // dedupe repeated perimeter records of the same named fire — but never
+    // merge distinct unnamed fires that happen to share a year
+    const k = a.FIRE_NAME ? a.FIRE_NAME + "|" + a.YEAR_ : "obj|" + a.OBJECTID;
     if (seen.has(k)) continue;
     seen.add(k);
     out.push({ name: a.FIRE_NAME || "Unnamed", year: a.YEAR_, acres: a.GIS_ACRES });
   }
+  out.capped = j.exceededTransferLimit === true; // 40-record server cap hit
   return out;
 }
 
@@ -969,6 +980,7 @@ async function loadSchools() {
     districtLookup(geo.lon, geo.lat),
     schoolsNearby(geo.lon, geo.lat)
   ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
   const district = dR.status === "fulfilled" ? dR.value : null;
   // which attendance-boundary source applies depends on the district result,
   // so this second hop is sequential by design
@@ -976,6 +988,7 @@ async function loadSchools() {
   let assigned = null;
   try { assigned = await (isLAUSD ? lausdAssigned(geo.lon, geo.lat) : sabsAssigned(geo.lon, geo.lat)); }
   catch (e) { /* assigned stays null → honest "couldn't load" label */ }
+  if (geo !== lastGeo) return;
   renderSchools(geo, district,
     sR.status === "fulfilled" ? sR.value : null,
     assigned);
@@ -1106,7 +1119,7 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
       ${pctlTile("Diesel particulates", ces.Diesel_PM_Pctl, "diesel PM emissions nearby")}
       ${pctlTile("Fine particles (PM2.5)", ces.PM2_5_Pctl, "annual fine-particle concentration")}
     </div>
-    <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
+    <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract).padStart(11, "0"))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
 
   let aqBody;
   if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — check AirNow below.</p>`;
@@ -1214,7 +1227,7 @@ function renderPeople(geo, acs) {
 
       const incTile = acs.inc === undefined ? failTile("Median household income")
         : (acs.inc && acs.inc.B19049_001E != null)
-          ? tile("Median household income", esc(dollars(acs.inc.B19049_001E, 250001, "&gt;$250k")),
+          ? tile("Median household income", esc(dollars(acs.inc.B19049_001E, 250001, ">$250k")),
               acs.inc.B19049_001M != null ? "± $" + Math.round(acs.inc.B19049_001M).toLocaleString() + " margin of error" : "")
           : noneTile("Median household income");
       const eduTile = acs.edu === undefined ? failTile("Bachelor’s degree or higher")
@@ -1227,7 +1240,7 @@ function renderPeople(geo, acs) {
           : noneTile("Owner-occupied homes");
       const valTile = acs.hou === undefined ? failTile("Median home value")
         : (acs.hou && acs.hou.B25077_001E != null)
-          ? tile("Median home value", esc(dollars(acs.hou.B25077_001E, 2000001, "&gt;$2M")), "owner-occupied units, self-reported")
+          ? tile("Median home value", esc(dollars(acs.hou.B25077_001E, 2000001, ">$2M")), "owner-occupied units, self-reported")
           : noneTile("Median home value");
       body = `<div class="tiles">${incTile}${eduTile}${ownTile}${valTile}</div>
         <p class="section-sub" style="margin-top:8px">${tractName ? esc(tractName) + " · " : ""}Census ACS 5-year estimates (latest release — 2020-2024 at last verification). Tract-level estimates carry real margins of error; treat them as a picture of the immediate neighborhood, not the block.</p>`;
@@ -1262,6 +1275,7 @@ async function loadPeople() {
   $("tab-people").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up census-tract demographics…</span></div></div>`;
   let acs = null;
   try { acs = await acsLookup(geo.lon, geo.lat); } catch (e) {}
+  if (geo !== lastGeo) return; // a new search started — never render stale data
   renderPeople(geo, acs);
 }
 
@@ -1309,6 +1323,8 @@ async function lapdLookup(lon, lat) {
   if (settled[0].status === "fulfilled") take(settled[0].value, "hndrdth_lat", "hndrdth_lon", "hndrdth_loc_chk");
   if (settled[1].status === "fulfilled") take(settled[1].value, "lat", "lon", "location");
   rows.sort((x, y) => y.date < x.date ? -1 : 1);
+  // a dataset returning exactly $limit rows means the true count is higher
+  rows.capped = settled.some(s => s.status === "fulfilled" && Array.isArray(s.value) && s.value.length >= 500);
   return { rows, partial: settled.some(s => s.status === "rejected") };
 }
 
@@ -1338,6 +1354,7 @@ async function lasdLookup(lon, lat) {
       });
     }
   rows.sort((x, y) => y.date < x.date ? -1 : 1);
+  rows.capped = settled.some(s => s.status === "fulfilled" && s.value && s.value.exceededTransferLimit === true);
   return { rows, partial: settled.some(s => s.status === "rejected") };
 }
 
@@ -1373,7 +1390,7 @@ function renderSafety(geo, juris, data) {
       for (const r of data.rows) for (const b of String(r.against || "").split(/,\s*/)) if (buckets[b] != null) buckets[b]++;
       body = `<h3 class="section">Reported offenses nearby (LAPD)</h3>
         <div class="tiles"><div class="tile"><div class="label">Offenses within 500 m · last 12 months</div>
-          <div class="value">${data.rows.length}</div>
+          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
           <div class="note">Against people ×${buckets.Person} · property ×${buckets.Property} · society ×${buckets.Society}</div></div></div>
         ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No offenses recorded within 500 m in the last 12 months.</p>`}
         ${data.partial ? `<div class="warnbox">One of the two LAPD datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
@@ -1386,7 +1403,7 @@ function renderSafety(geo, juris, data) {
       const p1 = data.rows.filter(r => r.part === "1").length, p2 = data.rows.filter(r => r.part === "2").length;
       body = `<h3 class="section">Reported crimes nearby (LA Sheriff)</h3>
         <div class="tiles"><div class="tile"><div class="label">Incidents within 500 m · last 12 months</div>
-          <div class="value">${data.rows.length}</div>
+          <div class="value">${data.rows.length}${data.rows.capped ? "+" : ""}</div>
           <div class="note">Part I (serious) ×${p1} · Part II ×${p2}</div></div></div>
         ${data.rows.length ? `<div class="schoollist">${incidentRows(data.rows, 5)}</div>` : `<p class="section-sub">No incidents recorded within 500 m in the last 12 months.</p>`}
         ${data.partial ? `<div class="warnbox">One of the two Sheriff datasets didn’t respond — part of the 12-month window is missing from this count.</div>` : ""}
@@ -1454,6 +1471,7 @@ async function loadSafety() {
   $("tab-safety").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking jurisdiction &amp; reported crime nearby…</span></div></div>`;
   let juris = null;
   try { juris = await jurisdictionLookup(geo.lon, geo.lat); } catch (e) {}
+  if (geo !== lastGeo) return; // a new search started — never render stale data
   let data = null;
   if (juris && !juris.none) {
     if (juris.incorporated && juris.name === "LOS ANGELES") {
@@ -1468,6 +1486,7 @@ async function loadSafety() {
       data = { kind: "city" };
     }
   }
+  if (geo !== lastGeo) return;
   renderSafety(geo, juris, data);
 }
 
@@ -1483,8 +1502,11 @@ function walkScoreUrl(label) {
   const slug = String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return "https://www.walkscore.com/score/" + slug;
 }
+// plain title-casing — no "La"→"LA" rewrite here, it would mangle Spanish
+// place names (La Crescenta, La Puente); the bikeways code special-cases the
+// one "LA River" street name itself
 function titleCase(s) {
-  return String(s).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase()).replace(/^La /, "LA ");
+  return String(s).toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());
 }
 
 async function walkLookup(lon, lat) {
@@ -1516,6 +1538,7 @@ async function stopsLookup(lon, lat) {
       out.push({ name: String(a.stop_name), dist: (g.x != null && g.y != null) ? haversineM(lat, lon, g.y, g.x) : null });
     }
     out.sort((x, y) => (x.dist == null ? 1e12 : x.dist) - (y.dist == null ? 1e12 : y.dist));
+    out.capped = j.exceededTransferLimit === true;
     return out;
   }
   const near = await ring(800);
@@ -1535,7 +1558,7 @@ async function bikesLookup(lon, lat) {
       const byClass = {}, streets = [];
       for (const a of cur) {
         if (typeof a.Class === "number") byClass[a.Class] = (byClass[a.Class] || 0) + 1;
-        const st = a.ST_NAME && titleCase(String(a.ST_NAME).trim());
+        const st = a.ST_NAME && titleCase(String(a.ST_NAME).trim()).replace(/^La River/, "LA River");
         if (st && !streets.includes(st)) streets.push(st);
       }
       return { src: "lacity", count: cur.length, byClass, streets };
@@ -1545,9 +1568,11 @@ async function bikesLookup(lon, lat) {
     const feats = countyR.value.filter(a => typeof a.class === "number" && a.class >= 1);
     const byClass = {};
     for (const a of feats) byClass[a.class] = (byClass[a.class] || 0) + 1;
+    // the countywide layer covers all of LA County, so its empty result is a
+    // trustworthy "none" — the LA City layer's empty result is not (the point
+    // may simply be outside LA City), so never report "none" from it alone
     return { src: "county", count: feats.length, byClass, streets: [] };
   }
-  if (cityR.status === "fulfilled") return { src: "lacity", count: 0, byClass: {}, streets: [] };
   throw new Error("bikeways failed");
 }
 
@@ -1579,7 +1604,7 @@ function renderMove(geo, walk, transit, bikes) {
     transitBody = `
       <div class="tiles">
         <div class="tile"><div class="label">Metro stops within ${radiusTxt}</div>
-          <div class="value">${transit.stops.length}</div>
+          <div class="value">${transit.stops.length}${transit.stops.capped ? "+" : ""}</div>
           <div class="note">${transit.radius === 1600
             ? (transit.stops.length ? "None within 800 m — widened to 1.6 km" : "No LA Metro stop within 1.6 km")
             : "LA Metro bus &amp; rail (Dec 2024 network)"}</div></div>
@@ -1642,6 +1667,7 @@ async function loadMove() {
     stopsLookup(geo.lon, geo.lat),
     bikesLookup(geo.lon, geo.lat)
   ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
   renderMove(geo,
     wR.status === "fulfilled" ? (wR.value || { none: true }) : null,
     tR.status === "fulfilled" ? tR.value : null,
@@ -1661,6 +1687,7 @@ async function loadAir() {
     railLookup(geo.lon, geo.lat),
     airportNoiseLookup(geo.lon, geo.lat)
   ]);
+  if (geo !== lastGeo) return; // a new search started — never render stale data
   renderAir(geo,
     hwR.status === "fulfilled" ? hwR.value : null,
     aadtR.status === "fulfilled" ? aadtR.value : null,
@@ -1676,7 +1703,11 @@ function resetTabs() {
     const p = $("tab-" + k);
     if (p) p.innerHTML = "";
   }
-  document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === "fire"));
+  document.querySelectorAll(".tab").forEach(x => {
+    const active = x.dataset.tab === "fire";
+    x.classList.toggle("active", active);
+    x.setAttribute("aria-selected", active ? "true" : "false");
+  });
   document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = x.id !== "tab-fire"; });
 }
 
@@ -1709,15 +1740,20 @@ function renderVerdict(geo, fhsz, nri, fires) {
     extra = `<div class="tile"><div class="label">Nearest hazard zone</div><div class="value" style="font-size:15px">${esc(fhsz.nearest.cls || "")}</div><div class="note">${dtxt} — close enough that some carriers' wildfire scores may notice</div></div>`;
   }
 
+  // nri === undefined → the FEMA service failed; null → no tract record here
   const nriRated = nri && nri.WFIR_RISKR && nri.WFIR_RISKS > 0 && !/no rating|not applicable|insufficient/i.test(nri.WFIR_RISKR);
-  const nriTile = !nri ? "" : nriRated
+  const nriTile = nri === undefined
+    ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The FEMA National Risk Index service didn’t respond</div></div>`
+    : !nri
+    ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">Not determined</div><div class="note">No FEMA tract record at this location</div></div>`
+    : nriRated
     ? `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">${esc(nri.WFIR_RISKR)}</div><div class="note">Risk score ${Math.round(nri.WFIR_RISKS)}/100 nationally (FEMA NRI)</div></div>`
     : `<div class="tile"><div class="label">FEMA wildfire rating · census tract</div><div class="value" style="font-size:15px">No rating</div><div class="note">FEMA hasn’t assigned a wildfire risk rating to this tract</div></div>`;
   const fireCount = fires ? fires.length : 0;
   const recent = fires && fires[0];
   const firesTile = fires
-    ? `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value">${fireCount}</div><div class="note">${recent ? "Most recent: " + esc(recent.name) + " (" + recent.year + ")" : "None recorded"}</div></div>`
-    : "";
+    ? `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value">${fireCount}${fires.capped ? "+" : ""}</div><div class="note">${recent ? "Most recent: " + esc(recent.name) + " (" + recent.year + ")" : "None recorded"}</div></div>`
+    : `<div class="tile"><div class="label">Wildfires within 5 km since 2005</div><div class="value" style="font-size:15px">Couldn’t load</div><div class="note">The fire-perimeter service didn’t respond</div></div>`;
 
   const outsideCA = geo.src !== "coords" && !/\bCA\b|California/i.test(geo.label || "");
 
@@ -1733,6 +1769,7 @@ function renderVerdict(geo, fhsz, nri, fires) {
     </div>
     <p class="verdict-text">${v.text}</p>
     ${outsideCA ? '<div class="warnbox">This address doesn’t look like it’s in California — CAL FIRE hazard-zone data only covers CA, so the zone result may not be meaningful here.</div>' : ""}
+    ${fhsz.partial ? '<div class="warnbox">Some of the official hazard-zone layers didn’t respond, so this zone result may be <strong>incomplete</strong> — double-check with the CAL FIRE map link below before relying on it.</div>' : ""}
     <div class="tiles">${extra}${nriTile}${firesTile}</div>
     <h3 class="section" style="margin-top:16px">Verify this address on the official sources</h3>
     <div class="links">
@@ -1798,11 +1835,12 @@ function renderMapLinks() {
 }
 
 /* ================= main flow ================= */
-let busy = false;
+let busy = false, statusTimer = null;
 async function run() {
   const q = $("addr").value.trim();
   if (!q || busy) return;
   busy = true;
+  clearTimeout(statusTimer); // a leftover hide-timer from the previous search must not hide this one's progress
   $("go").disabled = true;
   $("err").style.display = "none";
   $("result").style.display = "none";
@@ -1818,6 +1856,9 @@ async function run() {
     } catch (e) {
       if (e.message === "blocked") {
         throw new Error("Your browser or network is blocking the data requests entirely (neither geocoding service could even be reached). This is usually an ad-blocker or privacy extension (uBlock, NoScript, Privacy Badger), an antivirus web shield, a VPN, or DNS filtering (Pi-hole/NextDNS). Try a private window with extensions off, another browser, or your phone on cellular data — then whitelist this site in whichever tool was the culprit.");
+      }
+      if (e.message === "geo-down") {
+        throw new Error("Both geocoding services returned errors — they may be down or rate-limiting right now. Your address wasn’t the problem; wait a minute and try again.");
       }
       throw new Error("Couldn’t find that address. Try adding the ZIP code (e.g. “…, Glendale, CA 91206”), or paste coordinates as “lat, lon”.");
     }
@@ -1840,10 +1881,10 @@ async function run() {
     }
 
     renderVerdict(geo, fhszR.value,
-      nriR.status === "fulfilled" ? nriR.value : null,
-      firesR.status === "fulfilled" ? firesR.value : null);
+      nriR.status === "fulfilled" ? nriR.value : undefined,
+      firesR.status === "fulfilled" ? firesR.value : undefined);
     $("result").style.display = "block";
-    setTimeout(() => { $("status").style.display = "none"; }, 600);
+    statusTimer = setTimeout(() => { $("status").style.display = "none"; }, 600);
   } catch (e) {
     $("status").style.display = "none";
     $("err").textContent = e.message || "Something went wrong — please try again.";
@@ -1860,9 +1901,10 @@ document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", ()
   $("addr").value = ch.dataset.a; run();
 }));
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
-  document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+  document.querySelectorAll(".tab").forEach(x => { x.classList.remove("active"); x.setAttribute("aria-selected", "false"); });
   document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = true; });
   t.classList.add("active");
+  t.setAttribute("aria-selected", "true");
   const panel = $("tab-" + t.dataset.tab);
   if (panel) panel.hidden = false;
   if (lazyTabs[t.dataset.tab]) lazyTabs[t.dataset.tab].load();

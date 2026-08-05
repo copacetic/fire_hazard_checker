@@ -319,7 +319,7 @@ async function moveRoutes(page, opts = {}) {
     return json(r, METRO_P1);
   });
   await page.route("**/LA_City_Bikeways/**", r => json(r, opts.cityBikes || BIKE_P1));
-  await page.route("**/RmCCgQtiZLDCtblq/**", r => json(r, opts.countyBikes || { features: [] }));
+  await page.route("**/RmCCgQtiZLDCtblq/**", r => opts.countyDown ? r.abort("failed") : json(r, opts.countyBikes || { features: [] }));
 }
 
 // Noise (Phase 6) stubs — verbatim NTAD rail features near Tyburn (main line =
@@ -404,6 +404,7 @@ async function schoolsBaseRoutes(page) {
   const sch = await page.textContent("#tab-schools");
 
   check("SCH: fire panel now hidden", await page.locator("#tab-fire").isHidden());
+  check("ARIA: aria-selected tracks the active tab", (await page.locator('.tab[data-tab="schools"]').getAttribute("aria-selected")) === "true" && (await page.locator('.tab[data-tab="fire"]').getAttribute("aria-selected")) === "false");
   check("SCH: district name shown (LA Unified)", sch.includes("Los Angeles Unified"));
   check("SCH: district grades & vintage shown", sch.includes("KG–12") && sch.includes("2024-2025"));
   check("SCH: nearby schools listed", sch.includes("Atwater Avenue Elementary") && sch.includes("Ivanhoe Elementary"));
@@ -605,7 +606,7 @@ async function schoolsBaseRoutes(page) {
   check("AIR: CES overall 68th percentile", air.includes("68th"));
   check("AIR: CES traffic 91st percentile", air.includes("91st"));
   check("AIR: CES diesel 89th percentile", air.includes("89th"));
-  check("AIR: CES tract id + vintage shown", air.includes("6037187101") && air.includes("CalEnviroScreen 4.0"));
+  check("AIR: CES tract id zero-padded + vintage shown", air.includes("06037187101") && air.includes("CalEnviroScreen 4.0"));
   check("AIR: AQI 66 with Moderate category label", air.includes("66") && air.includes("Moderate"));
   check("AIR: PM2.5 value with units", air.includes("19.2") && air.includes("µg/m³"));
   check("AIR: Open-Meteo CC-BY attribution link", (await page.locator('#tab-air a[href="https://open-meteo.com/"]').count()) === 1);
@@ -745,6 +746,7 @@ async function schoolsBaseRoutes(page) {
   check("MOVE-P2: stops widened to 1.6 km with honest note", mv.includes("Metro stops within 1.6 km") && mv.includes("None within 800 m"), mv.slice(0, 400));
   check("MOVE-P2: duplicate stop names deduped in nearest list", (mv.match(/Glenoaks \/ Sonora/g) || []).length === 1);
   check("MOVE-P2: county bikeways 2 × Class III shared route", mv.includes("Class III shared route ×2") && mv.includes("countywide inventory"));
+  check("MOVE-P2: capped stop count shown as 3+", (await page.locator('#tab-move .tile:has-text("Metro stops") .value').textContent()).trim() === "3+");
   check("MOVE-P2: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
@@ -891,7 +893,7 @@ async function schoolsBaseRoutes(page) {
   await page.waitForTimeout(200);
   const sf = await page.textContent("#tab-safety");
   check("SAFE-LASD: jurisdiction Altadena unincorporated → Sheriff", sf.includes("Altadena") && sf.includes("Unincorporated") && sf.includes("Sheriff"));
-  check("SAFE-LASD: 5 incidents merged YTD+Historical", (await page.locator('#tab-safety .tile:has-text("Incidents within") .value').textContent()).trim() === "5", sf.slice(0, 300));
+  check("SAFE-LASD: 5+ incidents merged YTD+Historical (capped flag from exceededTransferLimit)", (await page.locator('#tab-safety .tile:has-text("Incidents within") .value').textContent()).trim() === "5+", sf.slice(0, 300));
   check("SAFE-LASD: Part I/II breakdown", sf.includes("Part I (serious) ×4") && sf.includes("Part II ×1"));
   check("SAFE-LASD: offense text title-cased", sf.includes("Grand Theft: From Unlocked Auto"));
   check("SAFE-LASD: block-level street shown", sf.includes("1000 Beverly Way"));
@@ -1025,6 +1027,155 @@ async function schoolsBaseRoutes(page) {
   check("PPL-ERR: total failure labeled honestly", pp.includes("Couldn’t load the census services"), pp.slice(0, 300));
   check("PPL-ERR: FCC link still offered (no tract link without GEOID)", (await page.locator('#tab-people a[href*="broadbandmap.fcc.gov"]').count()) === 1 && (await page.locator('#tab-people a[href*="censusreporter.org"]').count()) === 0);
   check("PPL-ERR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// ============== review-fix regressions (adversarial code review, Aug 2026) ==============
+
+// -- partial FHSZ outage must NOT read as a confident "not in a zone" --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("2968 Tyburn St, Los Angeles, California, 90039", -118.26164, 34.11268)));
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => r.abort("failed"));   // the four LRA25 phase layers (LA City's only zone source) die
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => r.abort("failed"));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => r.abort("failed"));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.waitForTimeout(400);
+  const verdict = await page.textContent("#verdict-card");
+  check("PART: no-zone verdict flagged as possibly incomplete", verdict.includes("Not in a designated") && verdict.includes("incomplete"), verdict.slice(0, 400));
+  check("PART: NRI failure shows Couldn’t load, not a missing tile", verdict.includes("Couldn’t load") && verdict.includes("National Risk Index service didn’t respond"));
+  check("PART: fire-history failure labeled too", verdict.includes("fire-perimeter service didn’t respond"));
+  check("PART: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- both geocoders erroring (HTTP 5xx) is a service problem, not a bad address --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+  const page = await ctx.newPage();
+  await page.route("**/geocode.arcgis.com/**", r => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+  await page.route("**/nominatim.openstreetmap.org/**", r => r.fulfill({ status: 503, contentType: "application/json", body: "{}" }));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#err", { state: "visible", timeout: 10000 });
+  const err = await page.textContent("#err");
+  check("GEO-DOWN: 5xx from both geocoders blames the services, not the address", err.includes("geocoding services returned errors") && !err.includes("Couldn’t find that address"), err);
+  await ctx.close();
+}
+
+// -- streets ending in "ca" (Seneca) must still get the Glendale, CA suffix --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 900 } });
+  const page = await ctx.newPage();
+  let captured = null;
+  await page.route("**/geocode.arcgis.com/**", r => { captured = decodeURIComponent(r.request().url()).replace(/\+/g, " "); return json(r, ESRI_MISS); });
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, []));
+  await page.goto(appUrl);
+  await page.fill("#addr", "1200 Seneca St");
+  await page.click("#go");
+  await page.waitForSelector("#err", { state: "visible", timeout: 10000 });
+  check("REGEX: 'Seneca' no longer suppresses the city/state suffix", captured != null && captured.includes("1200 Seneca St, Glendale, CA"), String(captured));
+  await ctx.close();
+}
+
+// -- top-coded ACS income renders as >$250k, not a double-escaped literal --
+{
+  // synthetic fixture: the verbatim P1 income row with the value raised to the
+  // Census top-code sentinel (250001) to exercise the >$250k branch
+  const ACS_INC_TOP = { features: [{ attributes: { GEOID: "06037187101", NAME: "Census Tract 1871.01", B19049_001E: 250001, B19049_001M: null } }] };
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  await schoolsBaseRoutes(page);
+  await peopleRoutes(page, { income: ACS_INC_TOP });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="people"]');
+  await page.waitForSelector("#tab-people .tile", { timeout: 10000 });
+  const pp = await page.textContent("#tab-people");
+  check("TOPCODE: renders >$250k, not the double-escaped '&gt;$250k'", pp.includes(">$250k") && !pp.includes("&gt;"), pp.slice(0, 200));
+  check("TOPCODE: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- empty LA City layer + dead county layer = couldn't load, never a fake "none" --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  await schoolsBaseRoutes(page);
+  await moveRoutes(page, { cityBikes: { features: [] }, countyDown: true });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="move"]');
+  await page.waitForSelector("#tab-move .tile", { timeout: 10000 });
+  await page.waitForTimeout(200);
+  const mv = await page.textContent("#tab-move");
+  check("BIKE-FALL: non-covering empty layer can't fabricate 'no bikeways'", mv.includes("Couldn’t load the bikeway inventories") && !mv.includes("No existing bikeway"), mv.slice(0, 400));
+  check("BIKE-FALL: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
+// -- stale-search race: a slow tab load from search #1 must never overwrite search #2 --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.route("**/geocode.arcgis.com/**", r => {
+    const u = decodeURIComponent(r.request().url());
+    return json(r, u.includes("Tyburn")
+      ? ESRI_HIT("2968 Tyburn St, Los Angeles, California, 90039", -118.26164, 34.11268)
+      : ESRI_HIT("1007 Matilija Rd, Glendale, California, 91208", -118.27626, 34.177624));
+  });
+  await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+  await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_EMPTY));
+  await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+  await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  // Tyburn's district lookup answers late (after the second search); Matilija's is instant
+  await page.route("**/School_Districts_Current/FeatureServer/**", async r => {
+    if (r.request().url().includes("-118.26164")) {
+      await new Promise(res => setTimeout(res, 2500));
+      return json(r, NCES_DIST_LAUSD);
+    }
+    return json(r, NCES_DIST_GUSD);
+  });
+  await page.route("**/Public_School_Locations_Current/FeatureServer/**", r => json(r, NCES_SCHOOLS_EMPTY));
+  await page.route("**/SABS_1516/**", r => json(r, SABS_GUSD));
+  await lausdAssignedRoutes(page);
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="schools"]');   // search #1's schools load now hangs on the slow district response
+  await page.waitForTimeout(150);
+  await page.fill("#addr", "1007 Matilija Rd, Glendale, CA 91208");
+  await page.click("#go");                        // search #2 resets the tabs mid-flight
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="schools"]');
+  await page.waitForSelector("#asglist .schoolrow", { timeout: 10000 });
+  await page.waitForTimeout(3200);                // give search #1's zombie promise time to resolve
+  const sch = await page.textContent("#tab-schools");
+  check("RACE: stale search #1 never overwrites search #2's schools", sch.includes("Glendale Unified") && sch.includes("Matilija") && !sch.includes("Los Angeles Unified"), sch.slice(0, 300));
+  check("RACE: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

@@ -259,6 +259,7 @@
     <div class="tabs" id="tabs" role="tablist">
       <button class="tab active" data-tab="fire" role="tab">Fire &amp; Insurance</button>
       <button class="tab" data-tab="schools" role="tab">Schools</button>
+      <button class="tab" data-tab="air" role="tab">Air &amp; Noise</button>
     </div>
 
     <div class="tabpanel" id="tab-fire" role="tabpanel">
@@ -276,6 +277,7 @@
     </div>
 
     <div class="tabpanel" id="tab-schools" role="tabpanel" hidden></div>
+    <div class="tabpanel" id="tab-air" role="tabpanel" hidden></div>
   </div>
 
   <footer>
@@ -742,7 +744,12 @@ function assignedHtml(assigned, isLAUSD) {
   return head + sub + `<div class="schoollist" id="asglist">${rows}</div>`;
 }
 
-let schoolsLoaded = false, lastGeo = null;
+// lazy tabs: each panel loads on first open after a search, resets on the next search
+let lastGeo = null;
+const lazyTabs = {
+  schools: { loaded: false, load: loadSchools },
+  air:     { loaded: false, load: loadAir }
+};
 function renderSchools(geo, district, schools, assigned) {
   const panel = $("tab-schools");
   const isLAUSD = !!(district && district.some(d => d.geoid === LAUSD_GEOID || /los angeles unified/i.test(d.name)));
@@ -843,8 +850,8 @@ function renderSchools(geo, district, schools, assigned) {
 }
 
 async function loadSchools() {
-  if (schoolsLoaded || !lastGeo) return;
-  schoolsLoaded = true;
+  if (lazyTabs.schools.loaded || !lastGeo) return;
+  lazyTabs.schools.loaded = true;
   const geo = lastGeo;
   $("tab-schools").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Looking up district, assigned schools &amp; nearby schools…</span></div></div>`;
   const [dR, sR] = await Promise.allSettled([
@@ -862,11 +869,21 @@ async function loadSchools() {
     sR.status === "fulfilled" ? sR.value : null,
     assigned);
 }
+async function loadAir() {
+  if (lazyTabs.air.loaded || !lastGeo) return;
+  lazyTabs.air.loaded = true;
+  // Phase 2 (freeway proximity, CalEnviroScreen, live air quality) lands here
+  $("tab-air").innerHTML = `<div class="card"><p class="section-sub" style="margin:0">This section is still being built — no data to show yet.</p></div>`;
+}
+
 function resetTabs() {
-  schoolsLoaded = false;
+  for (const k in lazyTabs) {
+    lazyTabs[k].loaded = false;
+    const p = $("tab-" + k);
+    if (p) p.innerHTML = "";
+  }
   document.querySelectorAll(".tab").forEach(x => x.classList.toggle("active", x.dataset.tab === "fire"));
   document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = x.id !== "tab-fire"; });
-  $("tab-schools").innerHTML = "";
 }
 
 /* ================= status UI ================= */
@@ -1054,7 +1071,7 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
   t.classList.add("active");
   const panel = $("tab-" + t.dataset.tab);
   if (panel) panel.hidden = false;
-  if (t.dataset.tab === "schools") loadSchools();
+  if (lazyTabs[t.dataset.tab]) lazyTabs[t.dataset.tab].load();
 }));
 renderCarriers();
 renderMapLinks();

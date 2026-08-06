@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>California Fire Risk &amp; Insurance Checker</title>
+<title>Address Research Tool</title>
 <style>
   :root {
     color-scheme: light;
@@ -243,8 +243,8 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>California Fire Risk &amp; Insurance Checker</h1>
-    <p class="sub">Enter any California address to check its official CAL FIRE hazard zone, federal wildfire risk score, nearby fire history — and which insurers are realistically writing policies there.</p>
+    <h1>Address Research Tool</h1>
+    <p class="sub">Enter any California address to check its fire-hazard zone and insurance outlook, schools, air and noise, transit, and neighborhood data — every number linked to its official source.</p>
   </header>
 
   <div class="card">
@@ -290,7 +290,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 · Open-Meteo air quality, CC BY 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -383,9 +383,6 @@ const AADT = "https://caltrans-gis.dot.ca.gov/arcgis/rest/services/CHhighway/Tra
 // (never -999) and individual fields can be null independently.
 const CES4 = "https://services.arcgis.com/o6oETlrWetREI1A2/ArcGIS/rest/services/CES4/FeatureServer/8/query";
 const CES_MAP = "https://experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"; // OEHHA's official CES 4.0 map
-// Open-Meteo air quality: keyless, CORS *, CC-BY 4.0 (attribution required);
-// ~10 km model grid, hourly updates.
-const OPENMETEO_AQ = "https://air-quality-api.open-meteo.com/v1/air-quality";
 // CARB Air Quality & Land Use Handbook (the 500-ft freeway advisory) — the
 // old 2021-12 URL 404s; this 2023-05 path is the live one.
 const CARB_HANDBOOK = "https://ww2.arb.ca.gov/sites/default/files/2023-05/Land%20Use%20Handbook_0.pdf";
@@ -1085,33 +1082,6 @@ function cesTier(p) {
   return { st: "critical", label: "Among CA’s highest" };
 }
 
-// fixed reference points so the current AQI can be compared across the LA
-// basin in the same hour, from the same model, in ONE request
-const AQ_REFS = [
-  ["Downtown LA", 34.0407, -118.2468],
-  ["Santa Monica", 34.0195, -118.4912],
-  ["Van Nuys", 34.1870, -118.4487]
-];
-async function aqLookup(lon, lat) {
-  const u = OPENMETEO_AQ + "?" + new URLSearchParams({
-    latitude: [lat, ...AQ_REFS.map(r => r[1])].join(","),
-    longitude: [lon, ...AQ_REFS.map(r => r[2])].join(","),
-    current: "us_aqi,pm2_5,pm10,ozone,nitrogen_dioxide",
-    timezone: "America/Los_Angeles"
-  });
-  const j = await getJSON(u, 12000);
-  // multi-location responses are a bare ARRAY in request order (the first
-  // entry carries no location_id); a single-point response is an object
-  const arr = Array.isArray(j) ? j : [j];
-  const cur = arr[0] && arr[0].current;
-  if (!cur) return null;
-  cur.refs = AQ_REFS.map((r, i) => ({
-    name: r[0],
-    aqi: (arr[i + 1] && arr[i + 1].current && arr[i + 1].current.us_aqi != null) ? Math.round(arr[i + 1].current.us_aqi) : null
-  })).filter(r => r.aqi != null);
-  return cur;
-}
-
 /* ---- noise (Phase 6): proximity to rail + airport contours ---- */
 async function railLookup(lon, lat) {
   const j = await getJSON(RAIL_LINES + "?" + new URLSearchParams({
@@ -1144,16 +1114,7 @@ async function airportNoiseLookup(lon, lat) {
   return { airport: best.AIRPORT_NAME ? String(best.AIRPORT_NAME) : "?", cnel: best.CLASS ? String(best.CLASS) : "?", src: best.SOURCE ? String(best.SOURCE) : null };
 }
 
-function aqiCat(v) {
-  if (v <= 50)  return { st: "good",     label: "Good" };
-  if (v <= 100) return { st: "warning",  label: "Moderate" };
-  if (v <= 150) return { st: "serious",  label: "Unhealthy for sensitive groups" };
-  if (v <= 200) return { st: "critical", label: "Unhealthy" };
-  if (v <= 300) return { st: "critical", label: "Very unhealthy" };
-  return { st: "critical", label: "Hazardous" };
-}
-
-function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
+function renderAir(geo, hw, aadt, ces, rail, apn) {
   const distLabel = { 200: "within ~200 m", 500: "within ~500 m", 1000: "within ~1 km" };
 
   let hwTile;
@@ -1202,26 +1163,6 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
     <p class="section-sub" style="margin-top:8px">Census tract ${esc(String(ces.Tract).padStart(11, "0"))}${ces.ApproxLoc ? " · " + esc(String(ces.ApproxLoc)) : ""} · CalEnviroScreen 4.0 (OEHHA, 2021 data — the state’s current version)</p>`;
   }
 
-  let aqBody;
-  if (!aq || aq.us_aqi == null) aqBody = `<p class="section-sub">Couldn’t load current air quality — the service may be briefly unreachable; try again in a minute, and check AirNow below.</p>`;
-  else {
-    const cat = aqiCat(aq.us_aqi);
-    const unitTile = (label, v, unit) => v == null ? "" :
-      `<div class="tile"><div class="label">${label}</div><div class="value">${esc(String(v))} <small>${unit}</small></div></div>`;
-    const refsLine = (aq.refs && aq.refs.length)
-      ? `<p class="section-sub" style="margin-top:8px"><strong>Across LA this hour:</strong> ${aq.refs.map(r => esc(r.name) + " " + r.aqi).join(" · ")} — same model, same hour, for comparison with the ${Math.round(aq.us_aqi)} here.</p>`
-      : "";
-    aqBody = `
-      <div class="tiles">
-        <div class="tile"><div class="label">US Air Quality Index</div><div class="value">${Math.round(aq.us_aqi)}</div><div class="note">${badge(cat.st, cat.label)}</div></div>
-        ${unitTile("Fine particles PM2.5", aq.pm2_5, "µg/m³")}
-        ${unitTile("Ozone", aq.ozone, "µg/m³")}
-        ${unitTile("Nitrogen dioxide", aq.nitrogen_dioxide, "µg/m³")}
-      </div>
-      ${refsLine}
-      <p class="section-sub" style="margin-top:8px">Hourly model estimate (~10 km grid, hyperlocal differences not captured), as of ${esc(String(aq.time || "").slice(11, 16))} local — the CalEnviroScreen percentiles above are the long-term picture. <a href="https://open-meteo.com/" target="_blank" rel="noopener">Air-quality data by Open-Meteo.com ↗</a> (CC BY 4.0)</p>`;
-  }
-
   // noise card (Phase 6): proximity signals + the official modeled-dB viewer
   let noiseBody;
   {
@@ -1263,10 +1204,6 @@ function renderAir(geo, hw, aadt, ces, aq, rail, apn) {
     <div class="card">
       <h3 class="section">Noise sources</h3>
       ${noiseBody}
-    </div>
-    <div class="card">
-      <h3 class="section">Air quality right now (snapshot)</h3>
-      ${aqBody}
     </div>
     <div class="card">
       <h3 class="section">Check the sources yourself</h3>
@@ -1650,11 +1587,10 @@ async function loadAir() {
   lazyTabs.air.loaded = true;
   const geo = lastGeo;
   $("tab-air").innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Checking freeways, pollution, air quality &amp; noise…</span></div></div>`;
-  const [hwR, aadtR, cesR, aqR, railR, apnR] = await Promise.allSettled([
+  const [hwR, aadtR, cesR, railR, apnR] = await Promise.allSettled([
     highwayLookup(geo.lon, geo.lat),
     aadtLookup(geo.lon, geo.lat),
     cesLookup(geo.lon, geo.lat),
-    aqLookup(geo.lon, geo.lat),
     railLookup(geo.lon, geo.lat),
     airportNoiseLookup(geo.lon, geo.lat)
   ]);
@@ -1663,7 +1599,6 @@ async function loadAir() {
     hwR.status === "fulfilled" ? hwR.value : null,
     aadtR.status === "fulfilled" ? aadtR.value : null,
     cesR.status === "fulfilled" ? (cesR.value || { none: true }) : null,
-    aqR.status === "fulfilled" ? aqR.value : null,
     railR.status === "fulfilled" ? railR.value : null,
     apnR.status === "fulfilled" ? apnR.value : undefined);
 }

@@ -1085,6 +1085,8 @@ const OSRM_TABLE_OK = { code: "Ok", distances: [[0, 12530.3, 34109.6]], destinat
   await page.click("#go");
   await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
   check("COMM: tab present", (await page.locator('.tab[data-tab="commute"]').count()) === 1);
+  const commuteTabBox = await page.locator('.tab[data-tab="commute"]').boundingBox();
+  check("TABS: every tab visible at 390px (wraps, never hidden off-screen)", commuteTabBox && commuteTabBox.x >= 0 && commuteTabBox.x + commuteTabBox.width <= 391, JSON.stringify(commuteTabBox));
   await page.click('.tab[data-tab="commute"]');
   await page.waitForSelector("#place-add", { timeout: 10000 });
   const empty = await page.textContent("#tab-commute");

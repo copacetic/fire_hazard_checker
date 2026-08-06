@@ -97,9 +97,10 @@
 
   /* ---- tabs ---- */
   .tabs {
-    display: flex; gap: 2px; margin: 2px 0 16px;
+    display: flex; flex-wrap: wrap; gap: 2px; margin: 2px 0 16px;
     border-bottom: 1px solid var(--hairline);
-    overflow-x: auto; -webkit-overflow-scrolling: touch;
+    /* wrap instead of horizontal scroll: an off-screen tab with no scroll
+       affordance is invisible on phones */
   }
   .tab {
     font: inherit; font-size: 14px; font-weight: 600;

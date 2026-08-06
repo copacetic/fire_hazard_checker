@@ -76,8 +76,6 @@
     cursor: pointer;
   }
   .searchrow button:disabled { opacity: 0.55; cursor: default; }
-  .examples { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
-  .examples span { font-size: 12px; color: var(--text-muted); align-self: center; }
   .chip {
     font-size: 12.5px; color: var(--text-secondary);
     background: none; border: 1px solid var(--hairline); border-radius: 999px;
@@ -255,12 +253,6 @@
              placeholder="e.g. 1500 E Chevy Chase Dr, Glendale, CA"
              aria-label="Street address">
       <button id="go">Check</button>
-    </div>
-    <div class="examples">
-      <span>Try:</span>
-      <button class="chip" data-a="3211 E Chevy Chase Dr, Glendale, CA">Chevy Chase Canyon</button>
-      <button class="chip" data-a="1731 Camulos Ave, Glendale, CA 91208">Verdugo Woodlands</button>
-      <button class="chip" data-a="613 E Broadway, Glendale, CA 91206">Downtown Glendale</button>
     </div>
   </div>
 
@@ -1875,9 +1867,6 @@ async function run() {
 
 $("go").addEventListener("click", run);
 $("addr").addEventListener("keydown", e => { if (e.key === "Enter") run(); });
-document.querySelectorAll(".chip").forEach(ch => ch.addEventListener("click", () => {
-  $("addr").value = ch.dataset.a; run();
-}));
 document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
   document.querySelectorAll(".tab").forEach(x => { x.classList.remove("active"); x.setAttribute("aria-selected", "false"); });
   document.querySelectorAll(".tabpanel").forEach(x => { x.hidden = true; });

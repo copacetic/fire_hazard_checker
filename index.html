@@ -1527,9 +1527,10 @@ function renderMove(geo, walk, transit, bikes, ws) {
     <div class="tiles">
       <div class="tile"><div class="label">National Walkability Index</div>
         <div class="value">${esc(walk.ind.toFixed(1))} <small>/ 20</small></div>
-        <div class="note">${esc(walkTier(walk.ind))} — density, street connectivity &amp; transit access combined</div></div>
+        <div class="note">${esc(walkTier(walk.ind))} — the federal EPA score for this block</div></div>
     </div>
-    <p class="section-sub" style="margin-top:8px">Census block group ${esc(walk.geoid || "")} · ${walk.src === "epa" ? "current EPA release" : "older 2010-vintage mirror (EPA’s main server didn’t respond)"}</p>`;
+    <p class="section-sub" style="margin-top:8px">The EPA index (1–20) estimates how much of daily life can happen on foot here: short connected blocks + transit nearby + homes, shops and jobs mixed together. It does <strong>not</strong> measure sidewalks, hills, shade or safety — quiet hillside streets can score low even where walking is pleasant, because there’s little to walk <em>to</em>.</p>
+    <p class="section-sub">Census block group ${esc(walk.geoid || "")} · ${walk.src === "epa" ? "current EPA release" : "older 2010-vintage mirror (EPA’s main server didn’t respond)"}</p>`;
 
   // Walk Score® tiles — only when the owner configured an API key
   // (ws === undefined: no key, skip silently; null: request failed)

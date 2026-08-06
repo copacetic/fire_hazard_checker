@@ -1058,6 +1058,98 @@ async function schoolsBaseRoutes(page) {
   await ctx.close();
 }
 
+// ===================== Commute tab (saved places, stubbed OSRM) =====================
+// verbatim OSRM /table response, live-captured Aug 2026: Tyburn → Downtown LA
+// (12,530 m / 849 s) and → Santa Monica (34,110 m / 1,780 s)
+const OSRM_TABLE_OK = { code: "Ok", distances: [[0, 12530.3, 34109.6]], destinations: [{ hint: "ZEh6hMLnk4RrAAAAEwAAAAAAAAAAAAAAJvqUQtLeTUEAAAAAAAAAAGsAAAATAAAAAAAAAAAAAAAsfQAAF3jz-PyECAJ4ePP4qIQIAgAA7wIAAAAA", location: [-118.261737, 34.112764], name: "Tyburn Street", distance: 12.91854654 }, { hint: "U517gGvYXYYBAAAABgAAAAAAAAANAAAAefT_PxbyCEEAAAAANZSeQQEAAAAGAAAAAAAAAA0AAAAsfQAAebLz-HVrBwJwsvP4fGsHAgAADw4AAAAA", location: [-118.246791, 34.040693], name: "San Pedro Street", distance: 1.137460169 }, { hint: "SDP2if___38CAAAAEgAAABUAAAAAAAAA0ZF-P3ntzEC5OQ5BAAAAAAIAAAASAAAAFQAAAAAAAAAsfQAAB_jv-OoYBwLA9-_4rBgHAgIAXwgAAAAA", location: [-118.491129, 34.019562], name: "", distance: 9.502397723 }], durations: [[0, 848.7, 1780.2]], sources: [{ hint: "ZEh6hMLnk4RrAAAAEwAAAAAAAAAAAAAAJvqUQtLeTUEAAAAAAAAAAGsAAAATAAAAAAAAAAAAAAAsfQAAF3jz-PyECAJ4ePP4qIQIAgAA7wIAAAAA", location: [-118.261737, 34.112764], name: "Tyburn Street", distance: 12.91854654 }] };
+
+// -- add places, get distances, remove, persist across reload --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1500 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await schoolsBaseRoutes(page);
+  // later-registered routes win: branch the geocoder by query so added places
+  // get their own coordinates
+  await page.route("**/geocode.arcgis.com/**", r => {
+    const u = decodeURIComponent(r.request().url()).replace(/\+/g, " ");
+    if (u.includes("Grand")) return json(r, ESRI_HIT("333 S Grand Ave, Los Angeles, California, 90071", -118.2506, 34.0525));
+    if (u.includes("Ocean")) return json(r, ESRI_HIT("200 Ocean Ave, Santa Monica, California, 90402", -118.4912, 34.0195));
+    return json(r, ESRI_HIT("2968 Tyburn St, Los Angeles, California, 90039", -118.26164, 34.11268));
+  });
+  await page.route("**/router.project-osrm.org/**", r => json(r, OSRM_TABLE_OK));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("COMM: tab present", (await page.locator('.tab[data-tab="commute"]').count()) === 1);
+  await page.click('.tab[data-tab="commute"]');
+  await page.waitForSelector("#place-add", { timeout: 10000 });
+  const empty = await page.textContent("#tab-commute");
+  check("COMM: empty state invites adding places", empty.includes("No saved places yet"), empty.slice(0, 200));
+  check("COMM: privacy note (localStorage only)", empty.includes("Stored only in this browser"));
+
+  await page.fill("#place-name", "Work");
+  await page.fill("#place-addr", "333 S Grand Ave, Los Angeles");
+  await page.click("#place-add");
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Work")', { timeout: 10000 });
+  await page.waitForTimeout(200);
+  let comm = await page.textContent("#tab-commute");
+  check("COMM: place added with geocoded label", comm.includes("Work") && comm.includes("333 S Grand Ave"), comm.slice(0, 300));
+  check("COMM: driving stats from OSRM (7.8 mi · 14 min)", comm.includes("7.8 mi") && comm.includes("14 min"), comm.slice(0, 300));
+  check("COMM: no-traffic disclaimer", comm.includes("without traffic"));
+  check("COMM: live-traffic directions link with both endpoints", (await page.locator('#tab-commute a[href*="google.com/maps/dir"][href*="origin=34.11268,-118.26164"][href*="destination=34.0525,-118.2506"]').count()) === 1);
+
+  await page.fill("#place-name", "Gym");
+  await page.fill("#place-addr", "200 Ocean Ave, Santa Monica");
+  await page.click("#place-add");
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Gym")', { timeout: 10000 });
+  await page.waitForTimeout(200);
+  comm = await page.textContent("#tab-commute");
+  check("COMM: second place gets the second table column (21.2 mi · 30 min)", comm.includes("21.2 mi") && comm.includes("30 min"), comm.slice(0, 400));
+
+  await page.click('#tab-commute .schoolrow:has-text("Work") button[data-rm]');
+  await page.waitForTimeout(400);
+  comm = await page.textContent("#tab-commute");
+  check("COMM: remove works", !comm.includes("Work") && comm.includes("Gym"), comm.slice(0, 300));
+
+  // persistence: places survive a full page reload (localStorage)
+  await page.reload();
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="commute"]');
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Gym")', { timeout: 10000 });
+  check("COMM: places persist across reload", true);
+  check("COMM: no JS errors", errors.length === 0, errors.join(" | "));
+  await page.screenshot({ path: path.join(here, "shot-commute.png"), fullPage: true });
+  await ctx.close();
+}
+
+// -- OSRM down: honest message, directions links still usable --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.addInitScript(() => localStorage.setItem("addressResearchPlaces", JSON.stringify([{ id: 1, name: "Work", addr: "333 S Grand Ave", label: "333 S Grand Ave, Los Angeles, California, 90071", lat: 34.0525, lon: -118.2506 }])));
+  await schoolsBaseRoutes(page);
+  await page.route("**/router.project-osrm.org/**", r => r.abort("failed"));
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="commute"]');
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Work")', { timeout: 10000 });
+  const comm = await page.textContent("#tab-commute");
+  check("COMM-ERR: router failure honest, links survive", comm.includes("Couldn’t load driving estimates") && (await page.locator('#tab-commute a[href*="google.com/maps/dir"]').count()) === 1, comm.slice(0, 300));
+  check("COMM-ERR: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
 // -- stale-search race: a slow tab load from search #1 must never overwrite search #2 --
 {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });

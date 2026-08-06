@@ -266,6 +266,7 @@
       <button class="tab" data-tab="air" id="tabbtn-air" role="tab" aria-selected="false" aria-controls="tab-air">Air &amp; Noise</button>
       <button class="tab" data-tab="move" id="tabbtn-move" role="tab" aria-selected="false" aria-controls="tab-move">Getting Around</button>
       <button class="tab" data-tab="people" id="tabbtn-people" role="tab" aria-selected="false" aria-controls="tab-people">People</button>
+      <button class="tab" data-tab="commute" id="tabbtn-commute" role="tab" aria-selected="false" aria-controls="tab-commute">Commute</button>
     </div>
 
     <div class="tabpanel" id="tab-fire" role="tabpanel" aria-labelledby="tabbtn-fire">
@@ -286,11 +287,12 @@
     <div class="tabpanel" id="tab-air" role="tabpanel" aria-labelledby="tabbtn-air" hidden></div>
     <div class="tabpanel" id="tab-move" role="tabpanel" aria-labelledby="tabbtn-move" hidden></div>
     <div class="tabpanel" id="tab-people" role="tabpanel" aria-labelledby="tabbtn-people" hidden></div>
+    <div class="tabpanel" id="tab-commute" role="tabpanel" aria-labelledby="tabbtn-commute" hidden></div>
   </div>
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · OSRM/OpenStreetMap driving estimates, saved places stored locally in your browser (Commute tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -900,7 +902,8 @@ const lazyTabs = {
   schools: { loaded: false, load: loadSchools },
   air:     { loaded: false, load: loadAir },
   move:    { loaded: false, load: loadMove },
-  people:  { loaded: false, load: loadPeople }
+  people:  { loaded: false, load: loadPeople },
+  commute: { loaded: false, load: loadCommute }
 };
 function renderSchools(geo, district, schools, assigned, dash) {
   const panel = $("tab-schools");
@@ -1080,6 +1083,120 @@ function cesTier(p) {
   if (p <= 75) return { st: "warning", label: "Above CA average" };
   if (p <= 90) return { st: "serious", label: "High for CA" };
   return { st: "critical", label: "Among CA’s highest" };
+}
+
+/* ================= commute (saved places) ================= */
+// Driving estimates come from the public OSRM demo server (OpenStreetMap
+// routing; keyless, CORS *, community-run with no SLA). Its times are
+// free-flow — NO live traffic — which the UI discloses; per-place Google
+// Maps directions links cover real-time. One /table request covers every
+// saved place at once. Places live only in this browser's localStorage.
+const OSRM_TABLE = "https://router.project-osrm.org/table/v1/driving/";
+const PLACES_KEY = "addressResearchPlaces";
+const PLACES_MAX = 10;
+function loadPlaces() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PLACES_KEY) || "[]");
+    return Array.isArray(p) ? p.filter(x => x && typeof x.lat === "number" && typeof x.lon === "number") : [];
+  } catch (e) { return []; }
+}
+function savePlaces(places) {
+  try { localStorage.setItem(PLACES_KEY, JSON.stringify(places)); } catch (e) { /* storage may be blocked — session-only then */ }
+}
+async function drivingTable(geo, places) {
+  const coords = [[geo.lon, geo.lat], ...places.map(p => [p.lon, p.lat])]
+    .map(c => c[0] + "," + c[1]).join(";");
+  const j = await getJSON(OSRM_TABLE + coords + "?" + new URLSearchParams({
+    sources: "0", annotations: "duration,distance"
+  }), 12000);
+  if (!j || j.code !== "Ok" || !j.distances || !j.distances[0]) throw new Error("osrm failed");
+  return places.map((p, i) => ({
+    dist: j.distances[0][i + 1],   // meters, road network
+    secs: j.durations[0][i + 1]
+  }));
+}
+function commuteRow(geo, p, r) {
+  const stats = r
+    ? (r.dist != null && r.secs != null
+        ? `${(r.dist / 1609.344).toFixed(1)} mi · ${Math.round(r.secs / 60)} min`
+        : "No route found")
+    : "";
+  const dirUrl = `https://www.google.com/maps/dir/?api=1&origin=${geo.lat},${geo.lon}&destination=${p.lat},${p.lon}`;
+  return `<div class="schoolrow">
+    <div class="srow-top"><span class="sname">${esc(p.name || p.addr)}</span><span class="sdist">${esc(stats)}</span></div>
+    <div class="smeta">${esc(p.label)}</div>
+    <div class="slinks">
+      <a href="${dirUrl}" target="_blank" rel="noopener">Directions with live traffic ↗</a>
+      <button class="chip" type="button" data-rm="${esc(String(p.id))}">Remove</button>
+    </div>
+  </div>`;
+}
+async function loadCommute() {
+  if (lazyTabs.commute.loaded || !lastGeo) return;
+  lazyTabs.commute.loaded = true;
+  const geo = lastGeo;
+  const panel = $("tab-commute");
+
+  async function render(statusMsg) {
+    if (geo !== lastGeo) return; // stale search
+    const places = loadPlaces();
+    let results = null, failed = false;
+    if (places.length) {
+      try { results = await drivingTable(geo, places); }
+      catch (e) { failed = true; }
+      if (geo !== lastGeo) return;
+    }
+    const rows = places.map((p, i) => commuteRow(geo, p, results ? results[i] : null)).join("");
+    panel.innerHTML = `
+      <div class="card">
+        <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
+        <h3 class="section">Driving from this address</h3>
+        ${places.length ? `
+          ${failed ? `<p class="section-sub">Couldn’t load driving estimates (the free OSRM router may be busy — try again in a minute). The directions links below still work.</p>` : ""}
+          <div class="schoollist">${rows}</div>
+          <p class="section-sub" style="margin-top:8px">Estimates are <strong>without traffic</strong> (OSRM/OpenStreetMap community router) — use the directions links for live travel times.</p>`
+        : `<p class="section-sub">No saved places yet. Add the addresses you care about — work, school, family, the gym — and every house you look up will show its driving distance to each one.</p>`}
+      </div>
+      <div class="card">
+        <h3 class="section">Your saved places</h3>
+        <p class="section-sub">Stored only in this browser (localStorage) — never uploaded. Up to ${PLACES_MAX}.</p>
+        <div class="searchrow" style="margin-bottom:8px">
+          <input id="place-name" type="text" placeholder="Name (e.g. Work)" aria-label="Place name" style="flex:0 1 34%">
+          <input id="place-addr" type="text" placeholder="Address" aria-label="Place address">
+        </div>
+        <div class="searchrow">
+          <button id="place-add" style="flex:1">Add place</button>
+        </div>
+        <p class="section-sub" id="place-status" style="margin:8px 0 0">${statusMsg ? esc(statusMsg) : ""}</p>
+      </div>`;
+
+    panel.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
+      savePlaces(loadPlaces().filter(p => String(p.id) !== b.dataset.rm));
+      render();
+    }));
+    const addBtn = panel.querySelector("#place-add");
+    if (addBtn) addBtn.addEventListener("click", async () => {
+      const name = panel.querySelector("#place-name").value.trim();
+      const addr = panel.querySelector("#place-addr").value.trim();
+      const status = panel.querySelector("#place-status");
+      if (!addr) { status.textContent = "Enter an address to add."; return; }
+      const cur = loadPlaces();
+      if (cur.length >= PLACES_MAX) { status.textContent = `Limit of ${PLACES_MAX} places reached — remove one first.`; return; }
+      addBtn.disabled = true;
+      status.textContent = "Looking up address…";
+      try {
+        const g = await geocode(addr);
+        cur.push({ id: Date.now(), name, addr, label: g.label, lat: g.lat, lon: g.lon });
+        savePlaces(cur);
+        render();
+      } catch (e) {
+        addBtn.disabled = false;
+        status.textContent = "Couldn’t find that address — try adding city and ZIP.";
+      }
+    });
+  }
+  panel.innerHTML = `<div class="card"><div class="step"><span class="spinner" aria-hidden="true"></span><span>Computing driving distances…</span></div></div>`;
+  render();
 }
 
 /* ---- noise (Phase 6): proximity to rail + airport contours ---- */

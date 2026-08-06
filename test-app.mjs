@@ -731,6 +731,7 @@ async function schoolsBaseRoutes(page) {
   const mv = await page.textContent("#tab-move");
   check("MOVE: walk index 12.7 / 20 (current EPA release, not 2010 mirror)", mv.includes("12.7") && mv.includes("/ 20") && mv.includes("current EPA release"), mv.slice(0, 250));
   check("MOVE: walk tier Above-average", mv.includes("Above-average walkable"));
+  check("MOVE: walkability explained in plain terms incl. what it ignores", mv.includes("short connected blocks") && mv.includes("not") && mv.includes("sidewalks, hills, shade or safety"), mv.slice(0, 500));
   check("MOVE: block group id shown", mv.includes("060371871011"));
   check("MOVE: 3 Metro stops within 800 m", mv.includes("Metro stops within 800 m") && mv.includes("Dec 2024"));
   check("MOVE: nearest stop Glendale / Riverside ~340 m first", (await page.textContent("#tab-move .schoolrow:first-child")).includes("Glendale / Riverside"), await page.textContent("#tab-move .schoolrow:first-child"));

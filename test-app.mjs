@@ -265,15 +265,6 @@ const AADT_I5 = { features: [
 ]}; // verbatim Traffic_AADT 500m ring @ Tyburn
 const CES_P1 = { features: [{ attributes: { Tract: 6037187101, CIscore: 35.34779344, CIscoreP: 68.06606152, PM2_5: 11.96632968, Traffic_Pctl: 90.9625, Diesel_PM_Pctl: 88.52520224, PM2_5_Pctl: 76.65214686, Ozone_Pctl: 64.72930927, Asthma_Pctl: 50.18693918, County: "Los Angeles", ApproxLoc: "Los Angeles", Population: 3438 } }] }; // verbatim CES4/8 @ Tyburn (PM2_5 raw re-captured)
 const CES_P2 = { features: [{ attributes: { Tract: 6037301300, CIscore: 26.48268089, CIscoreP: 51.91628845, PM2_5: 11.73519514, Traffic_Pctl: 7.6625, Diesel_PM_Pctl: 14.57373989, PM2_5_Pctl: 67.39265713, Ozone_Pctl: 76.93839452, Asthma_Pctl: 21.29860419, County: "Los Angeles", ApproxLoc: "Glendale", Population: 1894 } }] }; // verbatim CES4/8 @ Matilija Rd (PM2_5 raw re-captured)
-// Multi-location response is a bare ARRAY in request order; only entries after
-// the first carry location_id. Verbatim @ Tyburn + Downtown LA + Santa Monica
-// + Van Nuys (identical values are real — one uniform-basin hour).
-const OPENMETEO_OK = [
-  { latitude: 34.1, longitude: -118.3, generationtime_ms: 0.37729740142822266, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 117.0, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
-  { latitude: 34.0, longitude: -118.2, generationtime_ms: 0.12218952178955078, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 80.0, location_id: 1, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
-  { latitude: 34.0, longitude: -118.5, generationtime_ms: 0.09953975677490234, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 35.0, location_id: 2, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } },
-  { latitude: 34.200005, longitude: -118.399994, generationtime_ms: 0.09274482727050781, utc_offset_seconds: -25200, timezone: "America/Los_Angeles", timezone_abbreviation: "GMT-7", elevation: 220.0, location_id: 3, current_units: { time: "iso8601", interval: "seconds", us_aqi: "USAQI", pm2_5: "μg/m³", pm10: "μg/m³", ozone: "μg/m³", nitrogen_dioxide: "μg/m³" }, current: { time: "2026-08-05T14:00", interval: 3600, us_aqi: 67, pm2_5: 19.2, pm10: 23.9, ozone: 124.0, nitrogen_dioxide: 6.6 } }
-]; // verbatim multi-location capture
 // ===== Phase 3: Getting Around stubs (verbatim, live-captured Aug 2026) =====
 // The canonical EPA layer serves the CURRENT release (12.67 at Tyburn); the
 // AGOL mirror still hosts the older 2010-vintage index (15.167, field D4a).
@@ -341,7 +332,6 @@ async function airRoutes(page, opts = {}) {
     return json(r, SHN_EMPTY);
   });
   await page.route("**/CES4/FeatureServer/**", r => json(r, opts.ces || CES_P1));
-  await page.route("**/air-quality-api.open-meteo.com/**", r => json(r, OPENMETEO_OK));
   await page.route("**/xOi1kZaI0eWDREZv/**", r => json(r, opts.rail !== undefined ? opts.rail : RAIL_P1));
   await page.route("**/eGIS_Transportation_Hosted_Layers/**", r => json(r, opts.airport !== undefined ? opts.airport : { features: [] }));
 }
@@ -628,12 +618,8 @@ async function schoolsBaseRoutes(page) {
   check("AIR: plain verdict names the drivers", air.includes("higher than 68%") && air.includes("vehicle traffic (worse than 91% of tracts)"), air.slice(0, 500));
   check("AIR: percentile tiles carry plain-English tiers", air.includes("Among CA’s highest") && air.includes("High for CA"));
   check("AIR: absolute PM2.5 health comparison", air.includes("12.0 µg/m³") && air.includes("EPA health standard") && air.includes("2.4× the WHO guideline"), air.slice(0, 900));
-  check("AIR: long-term burden leads, live AQI demoted to snapshot", air.indexOf("Long-term air pollution burden") >= 0 && air.indexOf("Long-term air pollution burden") < air.indexOf("Air quality right now (snapshot)"));
+  check("AIR: long-term burden card leads; live-AQI snapshot card removed", air.indexOf("Long-term air pollution burden") >= 0 && !air.includes("Air quality right now"));
   check("AIR: CES tract id zero-padded + vintage shown", air.includes("06037187101") && air.includes("CalEnviroScreen 4.0"));
-  check("AIR: AQI 67 with Moderate category label", air.includes("67") && air.includes("Moderate"));
-  check("AIR: PM2.5 value with units", air.includes("19.2") && air.includes("µg/m³"));
-  check("AIR: LA-wide same-hour AQI comparison inline", air.includes("Across LA this hour") && air.includes("Downtown LA 67") && air.includes("Santa Monica 67") && air.includes("Van Nuys 67"), air.slice(0, 600));
-  check("AIR: Open-Meteo CC-BY attribution link", (await page.locator('#tab-air a[href="https://open-meteo.com/"]').count()) === 1);
   check("AIR: AirNow link centered on this address", (await page.locator('#tab-air a[href*="fire.airnow.gov"][href*="lat=34.11268"]').count()) === 1);
   check("AIR: CES official map verify link", (await page.locator('#tab-air a[href*="experience.arcgis.com/experience/11d2f52282a54ceebcac7428e6184203"]').count()) === 1);
   check("AIR: Caltrans Traffic Census verify link", (await page.locator('#tab-air a[href*="dot.ca.gov/programs/traffic-operations/census"]').count()) === 1);
@@ -689,7 +675,6 @@ async function schoolsBaseRoutes(page) {
   await schoolsBaseRoutes(page);
   await page.route("**/caltrans-gis.dot.ca.gov/**", r => r.abort("failed"));
   await page.route("**/CES4/FeatureServer/**", r => r.abort("failed"));
-  await page.route("**/air-quality-api.open-meteo.com/**", r => r.abort("failed"));
   await page.route("**/xOi1kZaI0eWDREZv/**", r => r.abort("failed"));
   await page.route("**/eGIS_Transportation_Hosted_Layers/**", r => r.abort("failed"));
   await page.goto(appUrl);
@@ -702,7 +687,6 @@ async function schoolsBaseRoutes(page) {
   const air = await page.textContent("#tab-air");
   check("AIR-ERR: highway + AADT tiles say Couldn’t load", (air.match(/Couldn’t load/g) || []).length >= 3, air.slice(0, 400));
   check("AIR-ERR: CES failure points at official map", air.includes("Couldn’t load CalEnviroScreen"));
-  check("AIR-ERR: AQ failure points at AirNow", air.includes("check AirNow"));
   check("AIR-ERR: rail + airport noise failures labeled", air.includes("Couldn’t load the federal rail-network layer") && air.includes("Couldn’t load the LA County airport-noise layer"));
   check("AIR-ERR: all five source links still shown", (await page.locator("#tab-air .links a").count()) === 5);
   check("AIR-ERR: no JS errors", errors.length === 0, errors.join(" | "));

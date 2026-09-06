@@ -310,7 +310,11 @@
 const CONFIG = Object.assign({
   // Free key from walkscore.com/professional/api.php →
   // inline Walk/Transit/Bike Score® tiles in the Getting Around tab
-  walkscoreKey: ""
+  walkscoreKey: "",
+  // Free key from developer.tomtom.com (2,500 requests/day) →
+  // rush-hour commute estimates WITH typical traffic in the Commute tab
+  // (morning house→place, evening place→house). CORS-verified.
+  tomtomKey: ""
 }, window.FIRE_CHECKER_KEYS || {});
 
 /* ================= endpoints ================= */
@@ -1116,16 +1120,51 @@ async function drivingTable(geo, places) {
     secs: j.durations[0][i + 1]
   }));
 }
-function commuteRow(geo, p, r) {
+// next weekday at hour:min, as RFC3339 with the local UTC offset — TomTom's
+// departAt uses this to apply typical (historical) traffic for that time
+function nextWeekdayAt(hour, min) {
+  const d = new Date();
+  do { d.setDate(d.getDate() + 1); } while (d.getDay() === 0 || d.getDay() === 6);
+  d.setHours(hour, min, 0, 0);
+  const pad = n => String(n).padStart(2, "0");
+  const off = -d.getTimezoneOffset(), sign = off >= 0 ? "+" : "-", ao = Math.abs(off);
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${sign}${pad(Math.floor(ao / 60))}:${pad(ao % 60)}`;
+}
+async function tomtomMinutes(fromLat, fromLon, toLat, toLon, departAt) {
+  const u = `https://api.tomtom.com/routing/1/calculateRoute/${fromLat},${fromLon}:${toLat},${toLon}/json?` +
+    new URLSearchParams({ key: CONFIG.tomtomKey, traffic: "true", travelMode: "car", departAt });
+  const j = await getJSON(u, 12000);
+  const s = j && j.routes && j.routes[0] && j.routes[0].summary;
+  return (s && s.travelTimeInSeconds != null) ? Math.round(s.travelTimeInSeconds / 60) : null;
+}
+// both rush directions for every place: out at 8:00 AM, back at 5:30 PM
+// (next weekday, typical traffic)
+async function rushTable(geo, places) {
+  const am = nextWeekdayAt(8, 0), pm = nextWeekdayAt(17, 30);
+  const settled = await Promise.allSettled(places.flatMap(p => [
+    tomtomMinutes(geo.lat, geo.lon, p.lat, p.lon, am),
+    tomtomMinutes(p.lat, p.lon, geo.lat, geo.lon, pm)
+  ]));
+  return places.map((p, i) => ({
+    out: settled[i * 2].status === "fulfilled" ? settled[i * 2].value : null,
+    back: settled[i * 2 + 1].status === "fulfilled" ? settled[i * 2 + 1].value : null
+  }));
+}
+
+function commuteRow(geo, p, r, rush) {
   const stats = r
     ? (r.dist != null && r.secs != null
         ? `${(r.dist / 1609.344).toFixed(1)} mi · ${Math.round(r.secs / 60)} min`
         : "No route found")
     : "";
   const dirUrl = `https://www.google.com/maps/dir/?api=1&origin=${geo.lat},${geo.lon}&destination=${p.lat},${p.lon}`;
+  const rushLine = rush
+    ? `<div class="smeta"><strong>Rush hour:</strong> ${rush.out != null ? "there ~" + rush.out + " min (8:00 AM)" : "there: unavailable"} · ${rush.back != null ? "back ~" + rush.back + " min (5:30 PM)" : "back: unavailable"} — typical weekday traffic</div>`
+    : "";
   return `<div class="schoolrow">
     <div class="srow-top"><span class="sname">${esc(p.name || p.addr)}</span><span class="sdist">${esc(stats)}</span></div>
     <div class="smeta">${esc(p.label)}</div>
+    ${rushLine}
     <div class="slinks">
       <a href="${dirUrl}" target="_blank" rel="noopener">Directions with live traffic ↗</a>
       <button class="chip" type="button" data-rm="${esc(String(p.id))}">Remove</button>
@@ -1141,13 +1180,17 @@ async function loadCommute() {
   async function render(statusMsg) {
     if (geo !== lastGeo) return; // stale search
     const places = loadPlaces();
-    let results = null, failed = false;
+    let results = null, failed = false, rush = null;
     if (places.length) {
-      try { results = await drivingTable(geo, places); }
-      catch (e) { failed = true; }
+      const [dR, rR] = await Promise.allSettled([
+        drivingTable(geo, places),
+        CONFIG.tomtomKey ? rushTable(geo, places) : Promise.resolve(null)
+      ]);
       if (geo !== lastGeo) return;
+      if (dR.status === "fulfilled") results = dR.value; else failed = true;
+      if (rR.status === "fulfilled") rush = rR.value;
     }
-    const rows = places.map((p, i) => commuteRow(geo, p, results ? results[i] : null)).join("");
+    const rows = places.map((p, i) => commuteRow(geo, p, results ? results[i] : null, rush ? rush[i] : null)).join("");
     panel.innerHTML = `
       <div class="card">
         <p class="matched">\u{1F4CD} ${esc(geo.label)}</p>
@@ -1155,7 +1198,7 @@ async function loadCommute() {
         ${places.length ? `
           ${failed ? `<p class="section-sub">Couldn’t load driving estimates (the free OSRM router may be busy — try again in a minute). The directions links below still work.</p>` : ""}
           <div class="schoollist">${rows}</div>
-          <p class="section-sub" style="margin-top:8px">Estimates are <strong>without traffic</strong> (OSRM/OpenStreetMap community router) — use the directions links for live travel times.</p>`
+          <p class="section-sub" style="margin-top:8px">Distance estimates are <strong>without traffic</strong> (OSRM/OpenStreetMap community router)${rush ? "; rush-hour lines use typical weekday traffic (TomTom)" : ""} — the directions links show live travel times.</p>`
         : `<p class="section-sub">No saved places yet. Add the addresses you care about — work, school, family, the gym — and every house you look up will show its driving distance to each one.</p>`}
       </div>
       <div class="card">
@@ -1803,11 +1846,17 @@ function renderVerdict(geo, fhsz, nri, fires) {
       <div><a href="https://hazards.lacounty.gov/" target="_blank" rel="noopener">LA County “Know Your Hazards” ↗</a><div class="ldesc">Independent county lookup — paste the address (LA County only)</div></div>
       <div><a href="https://firststreet.org/property" target="_blank" rel="noopener">First Street Fire Factor ↗</a><div class="ldesc">Independent 1–10 per-property score — paste the address</div></div>
       <div><button class="chip" id="copyaddr" type="button">Copy address for pasting</button></div>
+      <div><button class="chip" id="copylink" type="button">Copy link to this lookup</button></div>
     </div>`;
   const cp = $("copyaddr");
   if (cp) cp.addEventListener("click", async () => {
     try { await navigator.clipboard.writeText(geo.label); cp.textContent = "Copied ✓"; }
     catch (e) { cp.textContent = geo.label; }
+  });
+  const cl = $("copylink");
+  if (cl) cl.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(location.href); cl.textContent = "Link copied ✓"; }
+    catch (e) { cl.textContent = location.href; }
   });
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const f = $("meterfill"); if (f) f.style.width = sev.pct + "%";
@@ -1907,6 +1956,8 @@ async function run() {
     renderVerdict(geo, fhszR.value,
       nriR.status === "fulfilled" ? nriR.value : undefined,
       firesR.status === "fulfilled" ? firesR.value : undefined);
+    // make this lookup linkable/bookmarkable: the address rides in the hash
+    history.replaceState(null, "", "#a=" + encodeURIComponent(q));
     $("result").style.display = "block";
     statusTimer = setTimeout(() => { $("status").style.display = "none"; }, 600);
   } catch (e) {
@@ -1932,6 +1983,14 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 }));
 renderCarriers();
 renderMapLinks();
+// a shared link (#a=<address>) auto-runs that lookup on load
+{
+  const m = location.hash.match(/^#a=(.+)$/);
+  if (m) {
+    try { $("addr").value = decodeURIComponent(m[1]); run(); }
+    catch (e) { /* malformed hash — ignore, page just loads empty */ }
+  }
+}
 </script>
 </body>
 </html>

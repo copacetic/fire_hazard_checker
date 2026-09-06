@@ -1127,6 +1127,47 @@ const OSRM_TABLE_OK = { code: "Ok", distances: [[0, 12530.3, 34109.6]], destinat
   check("COMM: places persist across reload", true);
   check("COMM: no JS errors", errors.length === 0, errors.join(" | "));
   await page.screenshot({ path: path.join(here, "shot-commute.png"), fullPage: true });
+
+  // -- linkable lookups: hash set after search, auto-run from a shared link --
+  check("LINK: hash carries the searched address", (await page.evaluate(() => location.hash)).startsWith("#a=2968"), await page.evaluate(() => location.hash));
+  check("LINK: copy-link button rendered", (await page.locator("#copylink").count()) === 1);
+  await page.goto(appUrl + "#a=" + encodeURIComponent("2968 Tyburn St, Los Angeles, CA 90039"));
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  check("LINK: opening a shared link auto-runs the lookup", (await page.textContent("#verdict-card")).includes("2968 Tyburn St"));
+  await ctx.close();
+}
+
+// -- owner-configured keys: TomTom rush-hour both directions --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1400 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.addInitScript(() => {
+    window.FIRE_CHECKER_KEYS = { tomtomKey: "TESTKEY" };
+    localStorage.setItem("addressResearchPlaces", JSON.stringify([{ id: 1, name: "Work", addr: "333 S Grand Ave", label: "333 S Grand Ave, Los Angeles, California, 90071", lat: 34.0525, lon: -118.2506 }]));
+  });
+  await schoolsBaseRoutes(page);
+  await page.route("**/router.project-osrm.org/**", r => json(r, OSRM_TABLE_OK));
+  // response per TomTom Routing API docs (CORS origin-echo verified live with
+  // a 401 probe); direction told apart by which coords lead the path
+  await page.route("**/api.tomtom.com/**", r => {
+    const out = r.request().url().includes("/34.11268,-118.26164:");
+    return json(r, { formatVersion: "0.0.12", routes: [{ summary: { lengthInMeters: 12530, travelTimeInSeconds: out ? 1680 : 2280, trafficDelayInSeconds: out ? 780 : 1380, departureTime: "2026-08-11T08:00:00-07:00", arrivalTime: "2026-08-11T08:28:00-07:00" }, legs: [] }] });
+  });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="commute"]');
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Work")', { timeout: 10000 });
+  await page.waitForTimeout(300);
+  const comm = await page.textContent("#tab-commute");
+  check("RUSH: both directions with distinct times (28 out / 38 back)", comm.includes("there ~28 min (8:00 AM)") && comm.includes("back ~38 min (5:30 PM)"), comm.slice(0, 400));
+  check("RUSH: typical-traffic attribution shown", comm.includes("typical weekday traffic") && comm.includes("TomTom"));
+  check("RUSH: free-flow OSRM stats still shown too", comm.includes("7.8 mi"));
+  check("RUSH: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
 }
 

@@ -20,8 +20,11 @@ fire/insurance, schools, air & noise, transit, people, commute tabs.
    runtime deps. (`dashboard-ratings.json` is baked data, refreshed by
    `.github/workflows/refresh-dashboard-data.yml` running
    `scripts/build-dashboard-data.mjs` — not a build step for the page.)
-2. Keyless by default. Owner may add client-visible rate-limit keys via the
-   `CONFIG` block (public repo — only revocable keys). Never secret keys.
+2. Keyless by default. Optional rate-limit keys (Walk Score, TomTom) are
+   pasted in the UI and stored in localStorage (`addressResearchKeys`) —
+   NEVER committed: the repo is public. The `CONFIG` defaults +
+   `window.FIRE_CHECKER_KEYS` exist as overrides/test hooks; localStorage
+   wins. Never secret keys of any kind.
 3. Test-first: `npm i playwright@1.56.0 && node test-app.mjs` must pass
    100% before anything merges. PIN playwright@1.56.0 (matches the
    sandbox's preinstalled Chromium 1194). Tests stub ALL network from

@@ -1171,6 +1171,41 @@ const OSRM_TABLE_OK = { code: "Ok", distances: [[0, 12530.3, 34109.6]], destinat
   await ctx.close();
 }
 
+// -- TomTom key via the UI: localStorage-backed, never in the repo --
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 1500 } });
+  const page = await ctx.newPage();
+  const errors = [];
+  page.on("pageerror", e => errors.push(String(e)));
+  page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
+  await page.addInitScript(() => localStorage.setItem("addressResearchPlaces", JSON.stringify([{ id: 1, name: "Work", addr: "333 S Grand Ave", label: "333 S Grand Ave, Los Angeles, California, 90071", lat: 34.0525, lon: -118.2506 }])));
+  await schoolsBaseRoutes(page);
+  await page.route("**/router.project-osrm.org/**", r => json(r, OSRM_TABLE_OK));
+  await page.route("**/api.tomtom.com/**", r => {
+    const out = r.request().url().includes("/34.11268,-118.26164:");
+    return json(r, { formatVersion: "0.0.12", routes: [{ summary: { lengthInMeters: 12530, travelTimeInSeconds: out ? 1680 : 2280, trafficDelayInSeconds: 780, departureTime: "2026-08-11T08:00:00-07:00", arrivalTime: "2026-08-11T08:28:00-07:00" }, legs: [] }] });
+  });
+  await page.goto(appUrl);
+  await page.fill("#addr", "2968 Tyburn St, Los Angeles, CA 90039");
+  await page.click("#go");
+  await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  await page.click('.tab[data-tab="commute"]');
+  await page.waitForSelector("#tt-key", { timeout: 10000 });
+  const before = await page.textContent("#tab-commute");
+  check("KEYUI: no rush lines without a key + privacy promise shown", !before.includes("Rush hour:") && before.includes("never in the site’s code"), before.slice(0, 400));
+  await page.fill("#tt-key", "PASTED-TEST-KEY");
+  await page.click("#tt-save");
+  await page.waitForSelector('#tab-commute .schoolrow:has-text("Rush hour:")', { timeout: 10000 });
+  const after = await page.textContent("#tab-commute");
+  check("KEYUI: saving the key lights up rush hour immediately", after.includes("there ~28 min (8:00 AM)") && after.includes("TomTom key saved in this browser"), after.slice(0, 500));
+  check("KEYUI: key persisted to localStorage, not the page code", (await page.evaluate(() => JSON.parse(localStorage.getItem("addressResearchKeys") || "{}").tomtomKey)) === "PASTED-TEST-KEY");
+  await page.click("#tt-remove");
+  await page.waitForSelector("#tt-key", { timeout: 10000 });
+  check("KEYUI: remove clears the key and the rush lines", !(await page.textContent("#tab-commute")).includes("Rush hour:") && (await page.evaluate(() => JSON.parse(localStorage.getItem("addressResearchKeys") || "{}").tomtomKey)) === undefined);
+  check("KEYUI: no JS errors", errors.length === 0, errors.join(" | "));
+  await ctx.close();
+}
+
 // -- OSRM down: honest message, directions links still usable --
 {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 1200 } });

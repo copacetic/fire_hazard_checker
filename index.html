@@ -307,6 +307,16 @@
 // keys you can rotate, and restrict them by referrer where the provider
 // offers it. Keys can also be injected without editing this file by defining
 // window.FIRE_CHECKER_KEYS = {...} in a script tag before this one.
+// Keys pasted in the UI are stored ONLY in this browser's localStorage and
+// take precedence — the safe option for this public repo. Editing the
+// defaults below also works but publishes the key to the world.
+const KEYS_KEY = "addressResearchKeys";
+function loadStoredKeys() {
+  try {
+    const k = JSON.parse(localStorage.getItem(KEYS_KEY) || "{}");
+    return (k && typeof k === "object" && !Array.isArray(k)) ? k : {};
+  } catch (e) { return {}; }
+}
 const CONFIG = Object.assign({
   // Free key from walkscore.com/professional/api.php →
   // inline Walk/Transit/Bike Score® tiles in the Getting Around tab
@@ -315,7 +325,13 @@ const CONFIG = Object.assign({
   // rush-hour commute estimates WITH typical traffic in the Commute tab
   // (morning house→place, evening place→house). CORS-verified.
   tomtomKey: ""
-}, window.FIRE_CHECKER_KEYS || {});
+}, window.FIRE_CHECKER_KEYS || {}, loadStoredKeys());
+function saveStoredKey(name, value) {
+  const k = loadStoredKeys();
+  if (value) k[name] = value; else delete k[name];
+  try { localStorage.setItem(KEYS_KEY, JSON.stringify(k)); } catch (e) { /* blocked storage → key lives for this session only */ }
+  CONFIG[name] = value || (window.FIRE_CHECKER_KEYS || {})[name] || "";
+}
 
 /* ================= endpoints ================= */
 const FHSZ = "https://services1.arcgis.com/jUJYIo9tSA7EHvfZ/ArcGIS/rest/services/fhsz24_1/FeatureServer/0/query";
@@ -1212,8 +1228,30 @@ async function loadCommute() {
           <button id="place-add" style="flex:1">Add place</button>
         </div>
         <p class="section-sub" id="place-status" style="margin:8px 0 0">${statusMsg ? esc(statusMsg) : ""}</p>
+        <h3 class="section" style="margin-top:16px">Rush-hour traffic (optional)</h3>
+        ${CONFIG.tomtomKey ? `
+          <p class="section-sub">TomTom key saved in this browser ✓ — rush-hour times with typical traffic are on.</p>
+          <div class="searchrow"><button id="tt-remove" class="chip" type="button">Remove key</button></div>`
+        : `
+          <p class="section-sub">Paste a free TomTom API key (developer.tomtom.com, 2,500 requests/day) to add typical rush-hour times in both directions. Saved only in this browser (localStorage) — never uploaded, never in the site’s code.</p>
+          <div class="searchrow">
+            <input id="tt-key" type="text" placeholder="TomTom API key" aria-label="TomTom API key" autocomplete="off">
+            <button id="tt-save">Save</button>
+          </div>`}
       </div>`;
 
+    const ttSave = panel.querySelector("#tt-save");
+    if (ttSave) ttSave.addEventListener("click", () => {
+      const v = panel.querySelector("#tt-key").value.trim();
+      if (!v) return;
+      saveStoredKey("tomtomKey", v);
+      render(); // re-renders with rush-hour columns immediately
+    });
+    const ttRemove = panel.querySelector("#tt-remove");
+    if (ttRemove) ttRemove.addEventListener("click", () => {
+      saveStoredKey("tomtomKey", "");
+      render();
+    });
     panel.querySelectorAll("[data-rm]").forEach(b => b.addEventListener("click", () => {
       savePlaces(loadPlaces().filter(p => String(p.id) !== b.dataset.rm));
       render();

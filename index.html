@@ -547,7 +547,7 @@ const MAPLINKS = [
   ["CAL FIRE hazard-zone viewer (cities / LRA)", "https://experience.arcgis.com/experience/6a9cb66bb1824cd98756812af41292a0", "Search any address on the official 2025 map — the layer this tool queries"],
   ["City of Glendale FHSZ map", "https://experience.arcgis.com/experience/4e2761b53df746e8a2531859ac90f13e", "Glendale's own parcel-level hazard map (adopted July 2025)"],
   ["CDI Home Insurance Finder", "https://interactive.web.insurance.ca.gov/apex_extprd/f?p=400:50", "CA Dept. of Insurance directory — filter for companies covering higher fire-risk areas near a ZIP"],
-  ["First Street — Fire Factor", "https://firststreet.org/property", "Independent 1–10 per-property fire score (free lookup)"],
+  ["First Street — climate risk map", "https://firststreet.org/explore", "Independent 1–10 Fire, Flood, Heat and Wind scores for any property — search any address"],
   ["FEMA National Risk Index", "https://hazards.fema.gov/nri/map", "The federal tract-level risk data used here"]
 ];
 
@@ -1882,7 +1882,7 @@ function renderVerdict(geo, fhsz, nri, fires) {
       ${nri && nri.TRACTFIPS ? `<div><a href="https://hazards.fema.gov/nri/report/viewer?dataLOD=censustracts&dataIDs=T${esc(nri.TRACTFIPS)}" target="_blank" rel="noopener">FEMA National Risk Index — full report for this census tract ↗</a><div class="ldesc">FEMA’s own report page for tract ${esc(nri.TRACTFIPS)}</div></div>` : ""}
       <div><a href="https://www.google.com/maps?q=${geo.lat},${geo.lon}" target="_blank" rel="noopener">Google Maps pin at the checked location ↗</a><div class="ldesc">Confirm the geocoder found the right property</div></div>
       <div><a href="https://hazards.lacounty.gov/" target="_blank" rel="noopener">LA County “Know Your Hazards” ↗</a><div class="ldesc">Independent county lookup — paste the address (LA County only)</div></div>
-      <div><a href="https://firststreet.org/property" target="_blank" rel="noopener">First Street Fire Factor ↗</a><div class="ldesc">Independent 1–10 per-property score — paste the address</div></div>
+      <div><a href="https://firststreet.org/explore?mapbox_flag=true&search_term=${encodeURIComponent((geo.label || "").split(",")[0].trim())}&lat=${geo.lat}&lng=${geo.lon}" target="_blank" rel="noopener">First Street climate risk, centered on this address ↗</a><div class="ldesc">Independent 1–10 Fire, Flood, Heat and Wind scores — opens their map at this property; tap the home for the full report</div></div>
       <div><button class="chip" id="copyaddr" type="button">Copy address for pasting</button></div>
       <div><button class="chip" id="copylink" type="button">Copy link to this lookup</button></div>
     </div>`;

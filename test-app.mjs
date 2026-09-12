@@ -123,6 +123,16 @@ for (const [scenario, addr, colorScheme] of [
     check("LINKS: Google Maps pin at point", gLink === "https://www.google.com/maps?q=34.183,-118.247", String(gLink));
     const fLink = await page.locator('a[href*="hazards.fema.gov/nri/report"]').getAttribute("href");
     check("LINKS: FEMA tract report uses TRACTFIPS", fLink && fLink.includes("dataIDs=T06037302002"), String(fLink));
+    // First Street's /property landing and /search pages 404 and their address
+    // API has no CORS, so the only linkable per-address page is the /explore map
+    // (verified live 2026-09-12): street part as search_term + our geocode point.
+    const fsLink = await page.locator('a[href^="https://firststreet.org/explore?"]').getAttribute("href");
+    check("LINKS: First Street explore map at this address",
+      fsLink === "https://firststreet.org/explore?mapbox_flag=true&search_term=3211%20E%20Chevy%20Chase%20Dr&lat=34.183&lng=-118.247",
+      String(fsLink));
+    check("LINKS: static First Street resource no longer points at the broken /property page",
+      await page.locator('a[href="https://firststreet.org/explore"]').count() === 1 &&
+      await page.locator('a[href="https://firststreet.org/property"]').count() === 0);
     check("LINKS: copy-address button present", await page.locator("#copyaddr").count() === 1);
   }
   if (scenario === "downtown") {

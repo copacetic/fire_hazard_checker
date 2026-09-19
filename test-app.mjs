@@ -57,6 +57,32 @@ async function setupRoutes(page, scenario) {
     json(route, scenario === "downtown" ? FIRES_EMPTY : FIRES_OK));
 }
 
+// Insurability fixture — REAL entries from the baked insurability.json
+// (2026-09-19 bake: CDI 2020-2023 policy counts, CDI 2022 FAIR share, FAIR Plan
+// FY2025 by-ZIP counts, CDI undermarketed list of Mar 6, 2025). Injected via
+// window.FIRE_CHECKER_INSURABILITY because file:// pages can't fetch local JSON.
+// 90039 (Tyburn) is deliberately absent — its lookup must show the honest gap.
+const INSUR_FIX = {
+  generated: "2026-09-19",
+  sources: {
+    policy: { url: "https://www.insurance.ca.gov/01-consumers/200-wrr/upload/Residential-Insurance-Voluntary-Market-New-Renew-NonRenew-by-ZIP-2020-2023.xlsx", page: "https://www.insurance.ca.gov/01-consumers/200-wrr/DataAnalysisOnWildfiresAndInsurance.cfm", years: [2020, 2023] },
+    fairShare: { url: "https://www.insurance.ca.gov/01-consumers/200-wrr/upload/Number-of-Residential-Dwelling-Units-Insured-in-2022-FAIR-Plan-vs-Voluntary.pdf", page: "https://www.insurance.ca.gov/01-consumers/200-wrr/DataAnalysisOnWildfiresAndInsurance.cfm", year: 2022 },
+    fairPIF: { url: "https://www.cfpnet.com/wp-content/uploads/2025/11/CFP-5-yr-PIF-Zip-FY25-DWE-251114.pdf", page: "https://www.cfpnet.com/key-statistics-data/", fiscalYears: [2025, 2024, 2023, 2022, 2021], note: "FAIR Plan fiscal years end Sept 30" },
+    undermarketed: { url: "https://www.insurance.ca.gov/01-consumers/180-climate-change/upload/catastrophe-modeling-and-ratemaking-insurer-commitments-to-increase-writing-of-policies-in-high-risk-wildfire-areas-list-of-distressed-counties-and-undermarketed-zip-codes-residential-property-insurance-commitments.pdf", page: "https://www.insurance.ca.gov/01-consumers/180-climate-change/Sustainable-Insurance-Strategy.cfm", date: "March 6, 2025" }
+  },
+  state: { nr: 0.094, n0: 1007422, n1: 724037, fs: 0.032, v: 8079998, f: 269468, p: [621234, 449833, 320572, 265909, 236515], fe: 0.074, um: 662 },
+  z: {
+    "91206": { nr: 0.088, np: 0.47, n1: 273, n0: 501, v: 3899, f: 610, fs: 0.135, p: [923, 709, 633, 572, 574], fe: 0.205, fp: 0.83 },
+    "91205": { nr: 0.069, np: 0.12, n1: 216, n0: 251, v: 3068, f: 119, fs: 0.037, p: [193, 109, 95, 96, 102], fe: 0.061, fp: 0.58 },
+    "90046": { nr: 0.1, np: 0.67, n1: 370, n0: 652, v: 4814, f: 1850, fs: 0.278, p: [2290, 1979, 2006, 1862, 1656], fe: 0.344, fp: 0.89, um: 1 }
+  }
+};
+async function injectInsur(page, delayMs) {
+  await page.addInitScript(([d, ms]) => {
+    window.FIRE_CHECKER_INSURABILITY = ms ? new Promise(res => setTimeout(() => res(d), ms)) : d;
+  }, [INSUR_FIX, delayMs || 0]);
+}
+
 const results = [];
 function check(name, cond, detail) {
   results.push({ name, pass: !!cond, detail: detail || "" });
@@ -77,6 +103,7 @@ for (const [scenario, addr, colorScheme] of [
   page.on("pageerror", e => errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error" && !m.text().includes("Failed to load resource")) errors.push(m.text()); });
   await setupRoutes(page, scenario);
+  await injectInsur(page);
   await page.goto(appUrl);
   await page.fill("#addr", addr);
   await page.click("#go");
@@ -84,6 +111,7 @@ for (const [scenario, addr, colorScheme] of [
   await page.waitForTimeout(900);
 
   const verdict = await page.textContent("#verdict-card");
+  const insur = await page.textContent("#insur-card");
   const firesVisible = await page.isVisible("#fires-card");
   const carrierCount = await page.locator(".carrier").count();
   const quoteLinks = await page.locator(".carrier a.go").count();
@@ -134,6 +162,32 @@ for (const [scenario, addr, colorScheme] of [
       await page.locator('a[href="https://firststreet.org/explore"]').count() === 1 &&
       await page.locator('a[href="https://firststreet.org/property"]').count() === 0);
     check("LINKS: copy-address button present", await page.locator("#copyaddr").count() === 1);
+
+    // insurability card — ZIP 91206 from the ESRI label, real baked numbers
+    check("INSUR: headline tier for 91206 is Hard", insur.includes("Hard in ZIP 91206") && !insur.includes("Very hard"), insur.slice(0, 300));
+    check("INSUR: plain-language FAIR share sentence", insur.includes("About 1 in 5 homes in this ZIP is on the FAIR Plan") && insur.includes("higher share than 83% of California ZIP codes"), insur.slice(0, 600));
+    check("INSUR: FAIR tile shows estimate, official 2022 count, FY2025 policies and state context",
+      insur.includes("~21%") && insur.includes("13.5% in 2022") && insur.includes("923 FAIR policies in fiscal 2025, +30% in a year") && insur.includes("California overall ~7.4%"), insur.slice(0, 900));
+    check("INSUR: non-renewal tile vs statewide with percentile", insur.includes("Policies not renewed · 2023") && insur.includes("8.8%") && insur.includes("California overall 9.4%") && insur.includes("higher than 47% of CA ZIPs"));
+    check("INSUR: new-policy tile 2020 → 2023", insur.includes("New policies written · 2020 → 2023") && insur.includes("501 → 273 a year") && insur.includes("California overall -28%"));
+    check("INSUR: not on the must-write list, with the list size and date", insur.includes("Not among the 662 ZIPs") && insur.includes("March 6, 2025"));
+    check("INSUR: why-text explains owners vs buyers with the numbers", insur.includes("non-renewal rate is ordinary for California") && insur.includes("46% fewer new policies here in 2023 than in 2020") && insur.includes("grown 1.6× since fiscal 2021"));
+    check("INSUR: ZIP-not-house caveat shown", insur.includes("This describes the ZIP code, not this house"));
+    const brokerLink = await page.locator('#insur-card a[href="https://www.cfpnet.com/brokersearch/"]').count();
+    const rightLink = await page.locator('#insur-card a[href*="FAQ-Safer-from-Wildfire-Regulation.pdf"]').count();
+    const srcLinks = await page.locator('#insur-card a[href*="DataAnalysisOnWildfiresAndInsurance"], #insur-card a[href="https://www.cfpnet.com/key-statistics-data/"], #insur-card a[href*="Sustainable-Insurance-Strategy"]').count();
+    check("INSUR: broker-search, §2644.9 and three verify-at-source links", brokerLink === 1 && rightLink === 1 && srcLinks === 3, `${brokerLink}/${rightLink}/${srcLinks}`);
+    check("INSUR: bake date shown", insur.includes("Data baked 2026-09-19"));
+  }
+  if (scenario === "fallback") {
+    // OSM label "…, California, 91205, United States" → ZIP from the last 5-digit token
+    check("INSUR: ZIP parsed from the Nominatim label (91205) and tier Mostly normal", insur.includes("Mostly normal in ZIP 91205") && insur.includes("Only about 1 in 16 homes"), insur.slice(0, 300));
+  }
+  if (scenario === "lracity") {
+    check("INSUR: ZIP missing from the data is an honest gap, not zeros", insur.includes("No Department of Insurance data for ZIP 90039") && !insur.includes("0%"), insur.slice(0, 300));
+  }
+  if (scenario === "vh" || scenario === "downtown") {
+    check(scenario + ": State Farm listed as reopened-selective, not paused", (await page.textContent("#carriers")).includes("Reopened · selective") && (await page.textContent("#carriers")).includes("Sept 17, 2026"));
   }
   if (scenario === "downtown") {
     check("DT: unrated FEMA tract shows No rating (not 0/100)", verdict.includes("No rating") && !verdict.includes("0/100"));
@@ -233,6 +287,7 @@ const DASH_FIX = {
 async function injectDash(page) {
   await page.addInitScript(d => { window.FIRE_CHECKER_DATA = d; }, DASH_FIX);
 }
+
 
 async function lausdAssignedRoutes(page) {
   await page.route("**/maps.lacity.org/**", r => {
@@ -1283,6 +1338,85 @@ const OSRM_TABLE_OK = { code: "Ok", distances: [[0, 12530.3, 34109.6]], destinat
   check("RACE: stale search #1 never overwrites search #2's schools", sch.includes("Glendale Unified") && sch.includes("Matilija") && !sch.includes("Los Angeles Unified"), sch.slice(0, 300));
   check("RACE: no JS errors", errors.length === 0, errors.join(" | "));
   await ctx.close();
+}
+
+// -- insurability card: very-hard/must-write ZIP, coordinates input, missing data file, stale-search race --
+{
+  const fireRoutes = async page => {
+    await page.route("**/geocode.arcgis.com/**", r => json(r, ESRI_HIT("8000 Hollywood Blvd, Los Angeles, California, 90046", -118.3560, 34.1050)));
+    await page.route("**/nominatim.openstreetmap.org/**", r => json(r, NOMINATIM_HIT));
+    await page.route("**/utility.arcgis.com/**", r => json(r, FHSZ_EMPTY));
+    await page.route("**/fhsz24_1/FeatureServer/0/query**", r => json(r, FHSZ_VH));
+    await page.route("**/National_Risk_Index_Census_Tracts/**", r => json(r, NRI_OK));
+    await page.route("**/California_Historic_Fire_Perimeters/**", r => json(r, FIRES_EMPTY));
+  };
+  const search = async (page, q) => {
+    await page.fill("#addr", q);
+    await page.click("#go");
+    await page.waitForSelector("#result", { state: "visible", timeout: 10000 });
+  };
+
+  // 1) 90046: very hard + on the must-write list
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", e => errors.push(String(e)));
+    await fireRoutes(page);
+    await injectInsur(page);
+    await page.goto(appUrl);
+    await search(page, "8000 Hollywood Blvd, Los Angeles, CA 90046");
+    await page.waitForTimeout(400);
+    const t = await page.textContent("#insur-card");
+    check("INSUR-VH: 90046 is Very hard (34% on FAIR Plan → 1 in 3)", t.includes("Very hard in ZIP 90046") && t.includes("About 1 in 3 homes"), t.slice(0, 300));
+    check("INSUR-VH: must-write list Yes with the list date", t.includes("Yes") && t.includes("must expand coverage in this ZIP") && t.includes("March 6, 2025"));
+    check("INSUR-VH: 2022 share and fiscal-2025 growth shown", t.includes("28% in 2022") && t.includes("2,290 FAIR policies in fiscal 2025, +16% in a year"), t.slice(0, 900));
+    await page.screenshot({ path: path.join(here, "shot-insurability-390.png"), fullPage: true });
+    check("INSUR-VH: no JS errors", errors.length === 0, errors.join(" | "));
+
+    // 2) coordinates input has no ZIP → honest message, no fake data
+    await search(page, "34.1050, -118.3560");
+    await page.waitForTimeout(300);
+    const c = await page.textContent("#insur-card");
+    check("INSUR-COORDS: no ZIP in a coordinates lookup → says so", c.includes("Couldn’t determine a ZIP code") && !c.includes("90046"), c.slice(0, 200));
+    await ctx.close();
+  }
+
+  // 3) data file unavailable (no injection on file://) → 'Couldn't load', rest of the tab intact
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", e => errors.push(String(e)));
+    await fireRoutes(page);
+    await page.goto(appUrl);
+    await search(page, "8000 Hollywood Blvd, Los Angeles, CA 90046");
+    await page.waitForTimeout(300);
+    const t = await page.textContent("#insur-card");
+    check("INSUR-NODATA: missing insurability.json is disclosed, not blank", t.includes("Couldn’t load the insurance-market data"), t.slice(0, 200));
+    check("INSUR-NODATA: verdict card still rendered", (await page.textContent("#verdict-card")).includes("Very High Fire Hazard Severity Zone"));
+    check("INSUR-NODATA: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
+
+  // 4) race: search #1's slow data load must never overwrite search #2's card
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 1600 } });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on("pageerror", e => errors.push(String(e)));
+    await fireRoutes(page);
+    await injectInsur(page, 1500);              // data resolves 1.5 s after page load
+    await page.goto(appUrl);
+    await search(page, "8000 Hollywood Blvd, Los Angeles, CA 90046");
+    await page.waitForTimeout(100);
+    await search(page, "34.1050, -118.3560");   // search #2 lands while #1 is still awaiting the data
+    await page.waitForTimeout(2200);
+    const t = await page.textContent("#insur-card");
+    check("INSUR-RACE: stale search #1 never overwrites search #2's card", t.includes("Couldn’t determine a ZIP code") && !t.includes("90046"), t.slice(0, 200));
+    check("INSUR-RACE: no JS errors", errors.length === 0, errors.join(" | "));
+    await ctx.close();
+  }
 }
 
 await browser.close();

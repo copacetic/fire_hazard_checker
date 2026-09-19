@@ -1,0 +1,31 @@
+# Rebuilds insurability.json from the CA Dept. of Insurance and FAIR Plan
+# public files so the site's ZIP-level insurance-market card stays current.
+# CDI updates its ZIP data about once a year and the FAIR Plan posts new
+# by-ZIP counts a few times a year, so monthly is plenty. The script raises
+# on any layout change, so a broken parse never commits stale data.
+name: Refresh insurability data
+on:
+  schedule:
+    - cron: "41 10 5 * *"
+  workflow_dispatch:
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install pypdf
+      - run: python3 scripts/build-insurability-data.py
+      - name: Commit if changed
+        run: |
+          if ! git diff --quiet insurability.json; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add insurability.json
+            git commit -m "Refresh insurability data"
+            git push
+          fi

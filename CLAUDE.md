@@ -17,9 +17,11 @@ fire/insurance, schools, air & noise, transit, people, commute tabs.
 
 ## Hard rules
 1. Single self-contained `index.html`. No build step, no frameworks, no
-   runtime deps. (`dashboard-ratings.json` is baked data, refreshed by
-   `.github/workflows/refresh-dashboard-data.yml` running
-   `scripts/build-dashboard-data.mjs` — not a build step for the page.)
+   runtime deps. (`dashboard-ratings.json` and `insurability.json` are baked
+   data, refreshed by the `refresh-*-data.yml` workflows running
+   `scripts/build-dashboard-data.mjs` (Node, zero deps) and
+   `scripts/build-insurability-data.py` (Python + pypdf — three of its four
+   sources are PDFs) — not build steps for the page.)
 2. Keyless by default. Optional rate-limit keys (Walk Score, TomTom) are
    pasted in the UI and stored in localStorage (`addressResearchKeys`) —
    NEVER committed: the repo is public. The `CONFIG` defaults +
@@ -56,5 +58,10 @@ fire/insurance, schools, air & noise, transit, people, commute tabs.
 - ArcGIS quirks: NB/SB carriageway duplicates (dedupe), string-typed
   numbers (Caltrans AADT), `exceededTransferLimit` → show "N+",
   `where=1=1` required on some old MapServers, `-99999` sentinels.
-- file:// pages can't fetch local JSON: `window.FIRE_CHECKER_DATA` is the
-  test hook for `dashboard-ratings.json`.
+- file:// pages can't fetch local JSON: `window.FIRE_CHECKER_DATA` and
+  `window.FIRE_CHECKER_INSURABILITY` are the test hooks for
+  `dashboard-ratings.json` / `insurability.json` (a Promise works too — the
+  race test uses a delayed one).
+- Insurers' per-property wildfire scores (FireLine, Cotality, Z-FIRE) are not
+  sold to individuals and carrier quote sites never show them; the
+  insurability card is ZIP-level market data by design. Say so in the UI.

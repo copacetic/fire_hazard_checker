@@ -273,6 +273,7 @@
     <div class="tabpanel" id="tab-fire" role="tabpanel" aria-labelledby="tabbtn-fire">
       <div class="card" id="verdict-card"></div>
       <div class="card" id="fires-card" style="display:none"></div>
+      <div class="card" id="insur-card" style="display:none"></div>
       <div class="card">
         <h3 class="section">Where to get a quote</h3>
         <p class="section-sub" id="carriers-sub"></p>
@@ -293,7 +294,7 @@
 
   <footer>
     <p><strong>How to read this:</strong> insurers don't publish per-address eligibility, but they underwrite from the same official hazard maps shown here, plus proprietary wildfire scores (brush distance, slope, road access, roof type). Zone status is the strongest public predictor of whether carriers will quote — the definitive answer is always a real quote, which the links above start.</p>
-    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · OSRM/OpenStreetMap driving estimates, saved places stored locally in your browser (Commute tab) · NTAD rail network &amp; LA County airport noise contours (noise). Carrier status current as of <strong>Aug 2, 2026</strong> (CA Dept. of Insurance bulletins) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
+    <p>Data sources: CAL FIRE/OSFM Fire Hazard Severity Zones (2025 maps, adopted by Glendale July 2025) · FEMA National Risk Index · CAL FIRE fire perimeter records · NCES EDGE school districts &amp; public-school locations · LAUSD attendance boundaries 2019-20 (LA GeoHub) · NCES SABS attendance boundaries 2015-16 · CA School Dashboard ratings (CDE research files, baked into this site and refreshed monthly) (Schools tab) · Caltrans SHN &amp; Traffic Census · OEHHA CalEnviroScreen 4.0 (Air &amp; Noise tab) · EPA National Walkability Index · LA Metro stops Dec 2024 · LA City &amp; Metro bikeway inventories (Getting Around tab) · Census ACS 5-year tract estimates via Esri Living Atlas (People tab) · OSRM/OpenStreetMap driving estimates, saved places stored locally in your browser (Commute tab) · NTAD rail network &amp; LA County airport noise contours (noise) · CA Dept. of Insurance policy counts and FAIR Plan share by ZIP, and the FAIR Plan’s policies in force by ZIP (baked into this site, refreshed monthly). Carrier status current as of <strong>Sept 19, 2026</strong> (CA Dept. of Insurance bulletins, carrier announcements) — appetite changes often, so re-verify with a quote. School attendance is set by district boundaries, not proximity — always confirm with the official district tool. This tool is informational, not insurance, financial, or enrollment advice. Built while house-hunting in Glendale; works for any California address.</p>
   </footer>
 </div>
 
@@ -488,7 +489,7 @@ const VERDICTS = {
   }
 };
 
-/* ================= carrier data (as of Aug 2, 2026) ================= */
+/* ================= carrier data (as of Sept 19, 2026) ================= */
 const CARRIERS = [
   { g:"open", name:"Hippo (marketplace)", st:"good", stLabel:"Open · multi-carrier",
     desc:"Online agency quoting 40+ carriers at once — the fastest way to canvas the market for one address.",
@@ -522,8 +523,8 @@ const CARRIERS = [
     desc:"Tight limits on brush exposure and roof age; exiting CA condo & renters lines entirely in 2026.",
     url:"https://www.libertymutual.com" },
 
-  { g:"paused", name:"State Farm", st:"critical", stLabel:"Not accepting",
-    desc:"No new CA homeowners policies since May 2023; still paused as of mid-2026 (post-fire rate settlement extended its non-renewal moratorium instead).",
+  { g:"restricted", name:"State Farm", st:"warning", stLabel:"Reopened · selective",
+    desc:"Taking new CA homeowners applications again from Sept 17, 2026, after a pause since May 2023. Its own filing calls this “an eligibility gateway, not automatic approval” — expect declines on higher-risk homes.",
     url:"https://www.statefarm.com/insurance/home-and-property/homeowners" },
   { g:"paused", name:"Allstate", st:"critical", stLabel:"Not accepting",
     desc:"Paused new CA homeowners since Nov 2022. Signaled a possible SIS return in mid-2026 — worth re-checking.",
@@ -547,7 +548,7 @@ const MAPLINKS = [
   ["CAL FIRE hazard-zone viewer (cities / LRA)", "https://experience.arcgis.com/experience/6a9cb66bb1824cd98756812af41292a0", "Search any address on the official 2025 map — the layer this tool queries"],
   ["City of Glendale FHSZ map", "https://experience.arcgis.com/experience/4e2761b53df746e8a2531859ac90f13e", "Glendale's own parcel-level hazard map (adopted July 2025)"],
   ["CDI Home Insurance Finder", "https://interactive.web.insurance.ca.gov/apex_extprd/f?p=400:50", "CA Dept. of Insurance directory — filter for companies covering higher fire-risk areas near a ZIP"],
-  ["First Street — Fire Factor", "https://firststreet.org/property", "Independent 1–10 per-property fire score (free lookup)"],
+  ["First Street — climate risk map", "https://firststreet.org/explore", "Independent 1–10 Fire, Flood, Heat and Wind scores for any property — search any address"],
   ["FEMA National Risk Index", "https://hazards.fema.gov/nri/map", "The federal tract-level risk data used here"]
 ];
 
@@ -1882,7 +1883,7 @@ function renderVerdict(geo, fhsz, nri, fires) {
       ${nri && nri.TRACTFIPS ? `<div><a href="https://hazards.fema.gov/nri/report/viewer?dataLOD=censustracts&dataIDs=T${esc(nri.TRACTFIPS)}" target="_blank" rel="noopener">FEMA National Risk Index — full report for this census tract ↗</a><div class="ldesc">FEMA’s own report page for tract ${esc(nri.TRACTFIPS)}</div></div>` : ""}
       <div><a href="https://www.google.com/maps?q=${geo.lat},${geo.lon}" target="_blank" rel="noopener">Google Maps pin at the checked location ↗</a><div class="ldesc">Confirm the geocoder found the right property</div></div>
       <div><a href="https://hazards.lacounty.gov/" target="_blank" rel="noopener">LA County “Know Your Hazards” ↗</a><div class="ldesc">Independent county lookup — paste the address (LA County only)</div></div>
-      <div><a href="https://firststreet.org/property" target="_blank" rel="noopener">First Street Fire Factor ↗</a><div class="ldesc">Independent 1–10 per-property score — paste the address</div></div>
+      <div><a href="https://firststreet.org/explore?mapbox_flag=true&search_term=${encodeURIComponent((geo.label || "").split(",")[0].trim())}&lat=${geo.lat}&lng=${geo.lon}" target="_blank" rel="noopener">First Street climate risk, centered on this address ↗</a><div class="ldesc">Independent 1–10 Fire, Flood, Heat and Wind scores — opens their map at this property; tap the home for the full report</div></div>
       <div><button class="chip" id="copyaddr" type="button">Copy address for pasting</button></div>
       <div><button class="chip" id="copylink" type="button">Copy link to this lookup</button></div>
     </div>`;
@@ -1923,6 +1924,139 @@ function renderVerdict(geo, fhsz, nri, fires) {
     sev.key === "high" ? "In a High zone, the open carriers below are worth trying in order — mitigation evidence helps." :
     sev.key === "moderate" ? "Most open carriers below should quote; compare several." :
     "Outside designated hazard zones, most open carriers below should quote at standard rates.";
+}
+
+/* ---- ZIP-level insurance-market data, baked into the repo ----
+   insurability.json is generated by scripts/build-insurability-data.py from the
+   CA Dept. of Insurance's policy counts and FAIR Plan share by ZIP and the FAIR
+   Plan's own policies in force by ZIP (refreshed monthly by a GitHub Action).
+   The insurers' per-property wildfire scores (FireLine, Cotality, Z-FIRE) are
+   sold only to insurers and brokers, so market data by ZIP is the closest
+   public measure of insurability. window.FIRE_CHECKER_INSURABILITY overrides
+   the fetch (test hook — file:// pages can't fetch local files). */
+let insurDataP = null;
+function getInsurData() {
+  if (!insurDataP) {
+    insurDataP = window.FIRE_CHECKER_INSURABILITY
+      ? Promise.resolve(window.FIRE_CHECKER_INSURABILITY)
+      : location.protocol === "file:"
+      ? Promise.resolve(null)
+      : fetch("insurability.json").then(r => r.ok ? r.json() : null).catch(() => null);
+  }
+  return insurDataP;
+}
+// last 5-digit CA ZIP in a geocoder label (house numbers can also be 5 digits)
+function zipFromLabel(label) {
+  const all = String(label || "").match(/\b9\d{4}\b/g);
+  return all ? all[all.length - 1] : null;
+}
+// tiers keyed to the share of homes on the FAIR Plan (statewide ≈ 7%)
+function insurTier(fe) {
+  if (fe >= 0.25) return { key: "veryhard", label: "Very hard", color: "var(--st-critical)", icon: "alert" };
+  if (fe >= 0.15) return { key: "hard", label: "Hard", color: "var(--st-serious)", icon: "warn" };
+  if (fe >= 0.08) return { key: "harder", label: "Getting harder", color: "var(--st-warning)", icon: "warn" };
+  return { key: "normal", label: "Mostly normal", color: "var(--st-good)", icon: "check" };
+}
+const pctText = v => { const x = v * 100; return (x >= 20 ? x.toFixed(0) : x.toFixed(1).replace(/\.0$/, "")) + "%"; };
+const signedPct = v => (v > 0 ? "+" : "") + Math.round(v * 100) + "%";
+
+async function renderInsurability(geo) {
+  const card = $("insur-card");
+  const head = `<h3 class="section">How hard is it to get insurance here?</h3>`;
+  card.style.display = "";
+  card.innerHTML = head + `<p class="section-sub">Loading the Department of Insurance data…</p>`;
+  const zip = zipFromLabel(geo.label);
+  let data = null;
+  try { data = await getInsurData(); } catch (e) { data = null; }
+  if (geo !== lastGeo) return;
+  if (!zip) {
+    card.innerHTML = head + `<p class="section-sub">Couldn’t determine a ZIP code for this address, so the ZIP-level insurance-market data can’t be shown — try searching with the ZIP code included.</p>`;
+    return;
+  }
+  if (!data || !data.z || !data.state) {
+    card.innerHTML = head + `<p class="section-sub">Couldn’t load the insurance-market data (insurability.json) — the rest of this page still works.</p>`;
+    return;
+  }
+  const r = data.z[zip], s = data.state, src = data.sources || {};
+  if (!r) {
+    card.innerHTML = head + `<p class="section-sub">No Department of Insurance data for ZIP ${esc(zip)} — ZIPs with very few homes aren’t reported.</p>`;
+    return;
+  }
+  const yrs = (src.policy && src.policy.years) || [];
+  const y0 = yrs[0], y1 = yrs[1];
+  const fsYear = src.fairShare && src.fairShare.year;
+  const fys = (src.fairPIF && src.fairPIF.fiscalYears) || [];
+  const umDate = (src.undermarketed && src.undermarketed.date) || "";
+  const p = r.p || [];
+  const share = r.fe != null ? r.fe : r.fs;
+
+  // headline
+  let headline, why;
+  if (share != null) {
+    const t = insurTier(share);
+    const oneIn = share > 0 ? Math.round(1 / share) : null;
+    headline = `<div class="verdict-head"><h2 style="font-size:17px">${esc(t.label)} in ZIP ${esc(zip)}</h2><span class="badge">${icon(t.icon, t.color)}${esc(t.label)}</span></div>`;
+    why = t.key === "normal"
+      ? `Only about 1 in ${oneIn} homes in this ZIP is on the FAIR Plan (the state’s insurer of last resort) — close to the California average.`
+      : `About 1 in ${oneIn} homes in this ZIP is on the FAIR Plan, the state’s insurer of last resort${r.fp != null ? ` — a higher share than ${Math.round(r.fp * 100)}% of California ZIP codes` : ""}.`;
+  } else {
+    headline = `<div class="verdict-head"><h2 style="font-size:17px">ZIP ${esc(zip)}</h2><span class="badge">Not determined</span></div>`;
+    why = `No FAIR Plan share is reported for this ZIP.`;
+  }
+  const nrHigh = r.np != null && r.np >= 0.75;
+  if (r.nr != null) why += nrHigh
+    ? ` Non-renewals here are high for California, so existing owners are losing coverage too.`
+    : ` Existing owners mostly keep their coverage — the non-renewal rate is ordinary for California.`;
+  if (r.n0 > 0 && r.n1 != null) {
+    const chg = r.n1 / r.n0 - 1;
+    why += ` The squeeze shows up when a home changes hands: insurers wrote ${Math.abs(Math.round(chg * 100))}% ${chg < 0 ? "fewer" : "more"} new policies here in ${y1} than in ${y0}`;
+    if (p.length === 5 && p[4] > 0) {
+      const g = p[0] / p[4];
+      why += g >= 1.05 ? `, and FAIR Plan enrollment has grown ${g.toFixed(1)}× since fiscal ${fys[4]}` : `, while FAIR Plan enrollment has held about flat since fiscal ${fys[4]}`;
+    }
+    why += ".";
+  }
+
+  // tiles — every number labeled with its year and source
+  const tiles = [];
+  if (r.fe != null) {
+    tiles.push(`<div class="tile"><div class="label">Homes on the FAIR Plan · this ZIP</div><div class="value">~${pctText(r.fe)} <small>now, estimated</small></div><div class="note">${pctText(r.fs)} in ${fsYear} (official count) · ${p[0].toLocaleString()} FAIR policies in fiscal ${fys[0]}${p[1] > 0 ? ", " + signedPct(p[0] / p[1] - 1) + " in a year" : ""} · California overall ~${pctText(s.fe)}. Estimate = fiscal-${fys[0]} policies ÷ ${fsYear} insured homes.</div></div>`);
+  } else if (r.fs != null) {
+    tiles.push(`<div class="tile"><div class="label">Homes on the FAIR Plan · this ZIP</div><div class="value">${pctText(r.fs)} <small>in ${fsYear}</small></div><div class="note">Official count · California overall ${pctText(s.fs)} that year</div></div>`);
+  } else if (p.length) {
+    tiles.push(`<div class="tile"><div class="label">FAIR Plan policies · this ZIP</div><div class="value">${p[0].toLocaleString()}</div><div class="note">Fiscal ${fys[0]}${p[4] > 0 ? " · " + p[4].toLocaleString() + " in fiscal " + fys[4] : ""}</div></div>`);
+  } else {
+    tiles.push(`<div class="tile"><div class="label">Homes on the FAIR Plan · this ZIP</div><div class="value" style="font-size:15px">Not reported</div><div class="note">No FAIR Plan figures for this ZIP</div></div>`);
+  }
+  tiles.push(r.nr != null
+    ? `<div class="tile"><div class="label">Policies not renewed · ${y1}</div><div class="value">${pctText(r.nr)}</div><div class="note">California overall ${pctText(s.nr)}${r.np != null ? " · higher than " + Math.round(r.np * 100) + "% of CA ZIPs" : ""}</div></div>`
+    : `<div class="tile"><div class="label">Policies not renewed</div><div class="value" style="font-size:15px">Not reported</div><div class="note">No Department of Insurance count for this ZIP</div></div>`);
+  tiles.push(r.n0 > 0 && r.n1 != null
+    ? `<div class="tile"><div class="label">New policies written · ${y0} → ${y1}</div><div class="value">${signedPct(r.n1 / r.n0 - 1)}</div><div class="note">${r.n0.toLocaleString()} → ${r.n1.toLocaleString()} a year · California overall ${signedPct(s.n1 / s.n0 - 1)}</div></div>`
+    : `<div class="tile"><div class="label">New policies written</div><div class="value" style="font-size:15px">Not reported</div><div class="note">No Department of Insurance count for this ZIP</div></div>`);
+  tiles.push(r.um
+    ? `<div class="tile"><div class="label">On the state’s must-write list?</div><div class="value">Yes</div><div class="note">Insurers using the new rate rules must expand coverage in this ZIP (Dept. of Insurance “undermarketed” list, ${esc(umDate)})</div></div>`
+    : `<div class="tile"><div class="label">On the state’s must-write list?</div><div class="value">No</div><div class="note">Not among the ${s.um} ZIPs where insurers must expand coverage (Dept. of Insurance “undermarketed” list, ${esc(umDate)})</div></div>`);
+
+  card.innerHTML = `
+    ${head}
+    <p class="section-sub">Insurers’ per-property wildfire scores are sold only to insurers and brokers, so this is the closest public measure: what the insurance market is actually doing in this ZIP code.</p>
+    ${headline}
+    <p class="verdict-text">${why}</p>
+    <div class="tiles">${tiles.join("")}</div>
+    <div class="warnbox" style="margin-top:12px">This describes the ZIP code, not this house. Two homes on the same street can get opposite answers, because insurers score each property’s brush, slope and road access. The only way to know for this address is below.</div>
+    <h3 class="section" style="margin-top:16px">Get the real answer for this house</h3>
+    <div class="links">
+      <div><a href="https://www.cfpnet.com/brokersearch/" target="_blank" rel="noopener">Find a broker near ZIP ${esc(zip)} who can run this address ↗</a><div class="ldesc">The FAIR Plan’s broker search (enter ${esc(zip)}). Independent brokers hold FireLine / Cotality / Z-FIRE accounts — the actual scores insurers use — and can run a list of addresses before you write offers. Insurer websites can’t do this.</div></div>
+      <div><a href="https://www.insurance.ca.gov/01-consumers/105-type/95-guides/03-res/upload/FAQ-Safer-from-Wildfire-Regulation.pdf" target="_blank" rel="noopener">Your right to see the insurer’s wildfire score ↗</a><div class="ldesc">Once you apply, the insurer must tell you the property’s wildfire risk score within 15 days and let you appeal it (Safer from Wildfires rule, 10 CCR §2644.9).</div></div>
+    </div>
+    <h3 class="section" style="margin-top:16px">Verify these numbers at the source</h3>
+    <div class="links">
+      <div><a href="${esc((src.policy && src.policy.page) || "https://www.insurance.ca.gov/01-consumers/200-wrr/DataAnalysisOnWildfiresAndInsurance.cfm")}" target="_blank" rel="noopener">Dept. of Insurance: policies by ZIP, ${esc(String(y0))}–${esc(String(y1))} ↗</a><div class="ldesc">Source spreadsheet for the non-renewal and new-policy figures, and the ${esc(String(fsYear))} FAIR Plan share (PDF on the same page)</div></div>
+      <div><a href="${esc((src.fairPIF && src.fairPIF.page) || "https://www.cfpnet.com/key-statistics-data/")}" target="_blank" rel="noopener">FAIR Plan: policies in force by ZIP ↗</a><div class="ldesc">Source for the fiscal-${esc(String(fys[0]))} FAIR Plan counts (fiscal years end Sept 30)</div></div>
+      <div><a href="${esc((src.undermarketed && src.undermarketed.page) || "https://www.insurance.ca.gov/01-consumers/180-climate-change/Sustainable-Insurance-Strategy.cfm")}" target="_blank" rel="noopener">Dept. of Insurance: Sustainable Insurance Strategy ↗</a><div class="ldesc">Source for the must-write (“undermarketed”) ZIP list</div></div>
+    </div>
+    <p class="section-sub" style="margin-top:10px">Data baked ${esc(data.generated || "")}; refreshed monthly.</p>`;
 }
 
 function renderCarriers() {
@@ -1994,6 +2128,9 @@ async function run() {
     renderVerdict(geo, fhszR.value,
       nriR.status === "fulfilled" ? nriR.value : undefined,
       firesR.status === "fulfilled" ? firesR.value : undefined);
+    renderInsurability(geo).catch(() => {
+      $("insur-card").innerHTML = `<h3 class="section">How hard is it to get insurance here?</h3><p class="section-sub">Couldn’t load the insurance-market data — the rest of this page still works.</p>`;
+    });
     // make this lookup linkable/bookmarkable: the address rides in the hash
     history.replaceState(null, "", "#a=" + encodeURIComponent(q));
     $("result").style.display = "block";
